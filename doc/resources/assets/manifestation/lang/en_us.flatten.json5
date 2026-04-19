@@ -1,0 +1,8 @@
+{
+  hexdoc: {
+    manifestation: {
+      title: "Manifestation Book",
+      description: "The Manifestation Hex Casting addon documentation.",
+    },
+  },
+}

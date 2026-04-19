@@ -47,6 +47,7 @@ public final class MenuScreen extends Screen {
 
     private final MenuPayload menu;
     private final InteractionHand hand;
+    private boolean closeAfterSelection;
     private final Map<Integer, EditBox> inputBoxes = new LinkedHashMap<>();
     private final Map<Integer, MenuSlider> sliderBoxes = new LinkedHashMap<>();
     private final Map<Integer, MenuDropdown> dropdownBoxes = new LinkedHashMap<>();
@@ -362,6 +363,7 @@ public final class MenuScreen extends Screen {
         ActiveMenuState.get().clear();
         MenuActionSender.send(entry, this.hand, collectInputValues());
         if (this.minecraft != null) {
+            closeAfterSelection = true;
             this.minecraft.setScreen(null);
         }
     }
@@ -437,8 +439,12 @@ public final class MenuScreen extends Screen {
 
     @Override
     public void onClose() {
-        // Any close path clears active menu state.
-        ActiveMenuState.get().clear();
+        // Manual dismisses suppress immediate reopen from repeating casts.
+        if (closeAfterSelection) {
+            ActiveMenuState.get().clear();
+        } else {
+            ActiveMenuState.get().clearAndSuppressReopen(menu);
+        }
         super.onClose();
     }
 

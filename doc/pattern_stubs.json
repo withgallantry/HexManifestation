@@ -1,0 +1,44 @@
+[
+  {
+    "id": "manifestation:create_list_menu",
+    "signature": "awwaqwedwwd",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:create_grid_menu",
+    "signature": "awwaeawwaqwddad",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:intent_button",
+    "signature": "awwaqwedwwdaa",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:intent_input",
+    "signature": "awwaqwedwwdad",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:intent_slider",
+    "signature": "awwaqwedwwdaw",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:intent_section",
+    "signature": "awwaqwedwwdawde",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:intent_dropdown",
+    "signature": "awwaqwedwwdawaq",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  }
+]

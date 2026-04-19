@@ -50,6 +50,12 @@ public final class ManifestationClient implements ClientModInitializer {
     private static void openMenu(Minecraft mc, MenuPayload payload) {
         ActiveMenuState state = ActiveMenuState.get();
 
+        if (state.isReopenSuppressed(payload)) {
+            Manifestation.LOGGER.debug(
+                    "Manifestation: menu arrived during close-suppression window; dropping.");
+            return;
+        }
+
         // "Only one active menu at a time." If one is already live, the
         // incoming one is dropped. The server-side operator already succeeded
         // (stack was consumed, op count spent), so we just don't show it.

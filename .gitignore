@@ -89,3 +89,13 @@ nb-configuration.xml
 ##############################
 *.log
 references/
+
+##############################
+## Python / hexdoc
+##############################
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.env

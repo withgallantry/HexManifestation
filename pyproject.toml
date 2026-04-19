@@ -1,0 +1,72 @@
+[build-system]
+requires = [
+    "hatchling",
+    "hatch-gradle-version>=0.9.5",
+]
+build-backend = "hatchling.build"
+
+[project]
+name = "hexdoc-manifestation"
+description = "hexdoc plugin for Manifestation web book docs."
+authors = [
+    { name = "withgallantry" },
+]
+readme = "doc/README.md"
+keywords = ["hexdoc"]
+requires-python = ">=3.11"
+dynamic = ["version", "dependencies", "optional-dependencies"]
+
+[project.urls]
+Homepage = "https://withgallantry.github.io/HexManifestation/"
+Source = "https://github.com/withgallantry/HexManifestation"
+
+[tool.hatch.version]
+scheme = "gradle"
+source = "gradle-properties"
+py-path = "doc/src/hexdoc_manifestation/__version__.py"
+key = "mod_version"
+
+[tool.hatch.metadata.hooks.gradle-properties]
+dependencies = [
+    "hexdoc~=1!0.1.0a24",
+    { package = "hexdoc-minecraft", op = "~=", py-version = "1.0.dev", key = "minecraft_version" },
+    "hexdoc-hexcasting~=0.11.3.1.0",
+]
+
+[tool.hatch.metadata.hooks.gradle-properties.optional-dependencies]
+dev = [
+    "ruff~=0.11.2",
+]
+
+[tool.hatch.build]
+artifacts = [
+    "/doc/src/hexdoc_manifestation/_export/generated",
+    "/doc/src/hexdoc_manifestation/__gradle_version__.py",
+]
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "doc/src/hexdoc_manifestation",
+    "gradle.properties",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "doc/src/hexdoc_manifestation",
+]
+
+[project.entry-points.hexdoc]
+manifestation = "hexdoc_manifestation._hooks:ManifestationPlugin"
+
+[tool.pyright]
+pythonVersion = "3.11"
+pythonPlatform = "All"
+
+include = [
+    "doc/src",
+]
+extraPaths = [
+    "doc/src",
+]
+
+typeCheckingMode = "basic"

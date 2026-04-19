@@ -1,0 +1,35 @@
+modid = "manifestation"
+book = "hexcasting:thehexbook"
+default_lang = "en_us"
+default_branch = "main"
+
+resource_dirs = [
+    "resources",
+    "{$_common.src}/main/resources",
+    { path = "{$_common.src}/generated/resources", required = false },
+    { modid = "minecraft" },
+    { modid = "hexcasting" },
+    { modid = "hexdoc" },
+]
+export_dir = "src/hexdoc_manifestation/_export/generated"
+
+[extra.hexcasting]
+pattern_stubs = [
+    { type = "json", path = "pattern_stubs.json" },
+]
+
+[template]
+icon = "../docs/assets/ExampleTeleportMenu.png"
+include = [
+    "manifestation",
+    "hexcasting",
+    "hexdoc",
+]
+
+[template.args]
+mod_name = "Manifestation"
+author = "withgallantry"
+show_landing_text = true
+
+[_common]
+src = "../src"

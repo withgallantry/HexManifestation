@@ -1,0 +1,17 @@
+{
+  "name": "hexcasting.entry.manifestation_getting_started",
+  "category": "hexcasting:manifestation_getting_started",
+  "icon": "minecraft:writable_book",
+  "sortnum": 0,
+  "read_by_default": true,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "text": "hexcasting.page.manifestation.intro"
+    },
+    {
+      "type": "patchouli:text",
+      "text": "hexcasting.page.manifestation.getting_started.next"
+    }
+  ]
+}

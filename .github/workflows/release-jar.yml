@@ -4,6 +4,12 @@ on:
   release:
     types:
       - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to upload jar to (for example v0.2.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -25,6 +31,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Ensure gradlew is executable
+        run: chmod +x gradlew
+
       - name: Build
         run: ./gradlew build
 
@@ -34,9 +43,10 @@ jobs:
           find build/libs -maxdepth 1 -type f -name "*.jar" ! -name "*-sources.jar" -exec cp {} dist/ \;
 
       - name: Upload jar to release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.jar
+          tag_name: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
           fail_on_unmatched_files: true
           overwrite_files: true
