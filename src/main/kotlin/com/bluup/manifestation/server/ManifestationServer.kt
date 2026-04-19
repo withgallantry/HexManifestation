@@ -31,6 +31,10 @@ import net.minecraft.world.InteractionHand
  */
 object ManifestationServer : ModInitializer {
 
+    private const val MAX_INPUTS = 32
+    private const val MAX_ACTION_IOTAS = 256
+    private const val MAX_INPUT_STRING_CHARS = 256
+
     private const val LIST_MENU_SIG = "awwaqwedwwd"
     private val LIST_MENU_DIR = HexDir.NORTH_EAST
 
@@ -137,12 +141,22 @@ object ManifestationServer : ModInitializer {
         ) { server, player, _, buf, _ ->
             val hand = buf.readEnum(InteractionHand::class.java)
             val inputCount = buf.readVarInt()
+            if (inputCount < 0 || inputCount > MAX_INPUTS) {
+                Manifestation.LOGGER.warn(
+                    "Manifestation dispatch: rejecting packet from {} due to invalid inputCount {} (max {})",
+                    player.name.string,
+                    inputCount,
+                    MAX_INPUTS
+                )
+                return@registerGlobalReceiver
+            }
+
             val inputs = mutableListOf<MenuActionDispatcher.InputDatum>()
             repeat(inputCount) {
                 val order = buf.readVarInt()
                 when (buf.readEnum(MenuActionSender.InputKind::class.java)) {
                     MenuActionSender.InputKind.STRING -> {
-                        val value = buf.readUtf()
+                        val value = buf.readUtf(MAX_INPUT_STRING_CHARS)
                         inputs.add(MenuActionDispatcher.InputDatum.string(order, value))
                     }
 
@@ -152,7 +166,18 @@ object ManifestationServer : ModInitializer {
                     }
                 }
             }
+
             val count = buf.readVarInt()
+            if (count < 0 || count > MAX_ACTION_IOTAS) {
+                Manifestation.LOGGER.warn(
+                    "Manifestation dispatch: rejecting packet from {} due to invalid iota count {} (max {})",
+                    player.name.string,
+                    count,
+                    MAX_ACTION_IOTAS
+                )
+                return@registerGlobalReceiver
+            }
+
             val tags = (0 until count).map { buf.readNbt() }
             // Cast execution and session writes must run on the server thread.
             server.execute {

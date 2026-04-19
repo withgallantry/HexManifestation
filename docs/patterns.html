@@ -200,7 +200,7 @@
           </div>
           <div class="pill">Menu constructor</div>
         </div>
-        <p class="summary">Builds and opens a vertical list menu for the caster. It consumes a title and a list of typed UI entries from the stack and sends the resulting menu to the client.</p>
+        <p class="summary">Builds and opens a vertical list menu for the caster. It consumes a title and a list of typed UI entries from the stack and sends the resulting menu to the client; if no player caster exists, it mishaps.</p>
         <div class="meta">
           <div class="meta-block">
             <div class="meta-title">Takes</div>
@@ -213,7 +213,7 @@
           </div>
           <div class="meta-block">
             <div class="meta-title">Notes</div>
-            <p class="notes">Only typed UI iotas are accepted inside the entry list. Invalid individual entries are skipped; a bad outer list mishaps.</p>
+            <p class="notes">Only typed UI iotas are accepted inside the entry list. Invalid individual entries are skipped; a bad outer list mishaps. Missing player caster context also mishaps with "Manifestation requires a caster's will."</p>
           </div>
         </div>
         <div class="actions">
@@ -229,7 +229,7 @@
           </div>
           <div class="pill">Menu constructor</div>
         </div>
-        <p class="summary">Builds and opens a grid-layout menu for the caster. It works like CREATE_LIST_MENU, but also reads a column count and clamps it into the valid UI range.</p>
+        <p class="summary">Builds and opens a grid-layout menu for the caster. It works like CREATE_LIST_MENU, but also reads a column count and clamps it into the valid UI range; if no player caster exists, it mishaps.</p>
         <div class="meta">
           <div class="meta-block">
             <div class="meta-title">Takes</div>
@@ -243,7 +243,7 @@
           </div>
           <div class="meta-block">
             <div class="meta-title">Notes</div>
-            <p class="notes"><code>columns</code> must be a number iota. Value is rounded and clamped to 1..10 before build.</p>
+            <p class="notes"><code>columns</code> must be a number iota. Value is rounded and clamped to 1..10 before build. Missing player caster context mishaps with "Manifestation requires a caster's will."</p>
           </div>
         </div>
         <div class="actions">
@@ -316,7 +316,7 @@
           </div>
           <div class="pill">Entry constructor</div>
         </div>
-        <p class="summary">Builds a numeric slider entry with explicit bounds and current value.</p>
+        <p class="summary">Builds a numeric slider entry with explicit bounds and a current value. The rendered menu exposes a bounded numeric control to the player.</p>
         <div class="meta">
           <div class="meta-block">
             <div class="meta-title">Takes</div>
@@ -331,7 +331,7 @@
           </div>
           <div class="meta-block">
             <div class="meta-title">Notes</div>
-            <p class="notes"><code>min</code>, <code>max</code>, and <code>current</code> must be number iotas. <code>min</code> cannot exceed <code>max</code>, and <code>current</code> must be in range.</p>
+            <p class="notes"><code>min</code>, <code>max</code>, and <code>current</code> must all be number iotas. <code>min</code> cannot exceed <code>max</code>, and <code>current</code> must lie within the range.</p>
           </div>
         </div>
         <div class="actions">
@@ -347,7 +347,7 @@
           </div>
           <div class="pill">Entry constructor</div>
         </div>
-        <p class="summary">Builds a non-interactive section header entry for grouping related controls.</p>
+        <p class="summary">Builds a non-interactive section header entry. This is useful for grouping related controls inside a larger menu.</p>
         <div class="meta">
           <div class="meta-block">
             <div class="meta-title">Takes</div>
@@ -359,7 +359,7 @@
           </div>
           <div class="meta-block">
             <div class="meta-title">Notes</div>
-            <p class="notes">Render-only entry. It does not dispatch actions or accept input.</p>
+            <p class="notes">This entry only renders text. It does not dispatch actions or accept user input.</p>
           </div>
         </div>
         <div class="actions">
@@ -375,7 +375,7 @@
           </div>
           <div class="pill">Entry constructor</div>
         </div>
-        <p class="summary">Builds a dropdown entry with a fixed options list. Selected index starts at the first item.</p>
+        <p class="summary">Builds a dropdown selector entry with a fixed list of options. The constructor stores the options and initializes the selected index to the first item.</p>
         <div class="meta">
           <div class="meta-block">
             <div class="meta-title">Takes</div>
@@ -388,7 +388,7 @@
           </div>
           <div class="meta-block">
             <div class="meta-title">Notes</div>
-            <p class="notes">Options slot must be a non-empty list iota. Each option uses its <code>display()</code> text, initial selection is <code>0</code>.</p>
+            <p class="notes">The options slot must be a non-empty list iota. Each option is displayed using its <code>display()</code> text, and the initial selection is index <code>0</code>.</p>
           </div>
         </div>
         <div class="actions">

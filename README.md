@@ -45,6 +45,7 @@ Each button is itself a 2-element list:
 - Title slot wrong shape → no mishap (title accepts any iota and uses `display()`).
 - Outer button-list isn't a list → mishap (`InvalidIota`).
 - Column count isn't a number (grid only) → mishap.
+- No player caster is available (for example an unbound circle/impetus trigger) → mishap with message "Manifestation requires a caster's will."
 - Individual button malformed (wrong shape, bad pattern, empty action list) → silently skipped. The menu opens with the valid buttons only.
 
 ## Design notes
@@ -55,9 +56,10 @@ Each button is itself a 2-element list:
 - With MoreIotas installed, you push actual strings for labels.
 - Without it, you can push anything — a number, a pattern, an entity ref — and its `display()` value will appear on the button.
 
-**Server-side state.** The menu definition lives on the Hex stack, which lives on the server. The operators read it there, then send a packaged `MenuPayload` to the caster's client via a custom S2C packet. The client renders the menu. Button clicks re-enter Hex's pipeline as standard `MsgNewSpellPatternC2S` casts — indistinguishable from a player drawing those patterns in the staff GUI.
+**Server-side state.** The menu definition lives on the Hex stack, which lives on the server. The operators read it there, then send a packaged `MenuPayload` to the caster's client via a custom S2C packet. The client renders the menu. If no player caster exists for the current cast context, menu creation mishaps. Button clicks re-enter Hex's pipeline as standard `MsgNewSpellPatternC2S` casts — indistinguishable from a player drawing those patterns in the staff GUI.
+This was done because without using patterns for intents, it got quickly complicated to manage. E.g. lists of lists that contain different iotas like strings, numbers etc in specific orders to denote interactive UI elements. It also made it difficult to detect when ill-formed ui elements were being created.
 
-## Architecture
+## Architecture (auto-generated)
 
 ```
 src/main/java/com/bluup/manifestation/

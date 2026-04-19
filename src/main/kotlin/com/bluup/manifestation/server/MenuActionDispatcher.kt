@@ -33,6 +33,9 @@ import java.lang.reflect.Constructor
  */
 object MenuActionDispatcher {
 
+    private const val MAX_INPUTS = 32
+    private const val MAX_ACTION_IOTAS = 256
+
     data class InputDatum(
         val order: Int,
         val kind: Kind,
@@ -95,6 +98,24 @@ object MenuActionDispatcher {
      */
     @JvmStatic
     fun dispatch(player: ServerPlayer, hand: InteractionHand, inputs: List<InputDatum>, iotas: List<Iota>) {
+        if (inputs.size > MAX_INPUTS) {
+            Manifestation.LOGGER.warn(
+                "MenuActionDispatcher: rejecting dispatch for {} due to too many inputs ({})",
+                player.name.string,
+                inputs.size
+            )
+            return
+        }
+
+        if (iotas.size > MAX_ACTION_IOTAS) {
+            Manifestation.LOGGER.warn(
+                "MenuActionDispatcher: rejecting dispatch for {} due to too many iotas ({})",
+                player.name.string,
+                iotas.size
+            )
+            return
+        }
+
         if (iotas.isEmpty()) {
             Manifestation.LOGGER.info("MenuActionDispatcher: empty action list, nothing to do")
             return
