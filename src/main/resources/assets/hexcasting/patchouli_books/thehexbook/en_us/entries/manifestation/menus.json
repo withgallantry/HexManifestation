@@ -1,8 +1,8 @@
 {
   "name": "hexcasting.entry.manifestation_menus",
-  "category": "hexcasting:manifestation",
+  "category": "hexcasting:patterns",
   "icon": "minecraft:book",
-  "sortnum": 0,
+  "sortnum": 900,
   "read_by_default": true,
   "pages": [
     {

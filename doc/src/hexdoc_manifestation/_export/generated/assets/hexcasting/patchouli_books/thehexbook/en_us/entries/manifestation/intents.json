@@ -1,8 +1,8 @@
 {
   "name": "hexcasting.entry.manifestation_intents",
-  "category": "hexcasting:manifestation",
+  "category": "hexcasting:patterns",
   "icon": "minecraft:oak_button",
-  "sortnum": 0,
+  "sortnum": 901,
   "read_by_default": true,
   "pages": [
     {
