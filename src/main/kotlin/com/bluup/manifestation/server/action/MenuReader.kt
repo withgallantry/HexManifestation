@@ -50,18 +50,19 @@ internal object MenuReader {
             throw MishapNotEnoughArgs(2, stack.size)
         }
 
-        // Title is on top.
+        // Fixed contract: top is title, below is buttons-list.
+        // This corresponds to input order [buttons-list, title].
         val titleIota = stack.removeAt(stack.lastIndex)
+        val buttonsIota = stack.removeAt(stack.lastIndex)
+
         val title: Component = titleIota.display()
         Manifestation.LOGGER.info(
-            "MenuReader: popped title = '{}' (type {})",
+            "MenuReader: title = '{}' (type {})",
             title.string, titleIota::class.simpleName
         )
 
-        // Button list is below.
-        val buttonsIota = stack.removeAt(stack.lastIndex)
         Manifestation.LOGGER.info(
-            "MenuReader: popped buttons-slot iota of type {}",
+            "MenuReader: buttons-slot iota type {}",
             buttonsIota::class.simpleName
         )
         if (buttonsIota !is ListIota) {
@@ -69,6 +70,7 @@ internal object MenuReader {
                 "MenuReader: buttons slot is NOT a ListIota — it is {}. Mishapping.",
                 buttonsIota::class.simpleName
             )
+            // Restore original order on mishap.
             stack.add(buttonsIota)
             stack.add(titleIota)
             throw MishapInvalidIota.ofType(buttonsIota, 1, "list")
