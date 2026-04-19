@@ -1,0 +1,73 @@
+{
+  "name": "hexcasting.entry.manifestation_menus",
+  "category": "hexcasting:manifestation",
+  "icon": "minecraft:book",
+  "sortnum": 0,
+  "read_by_default": true,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "text": "hexcasting.page.manifestation.intro"
+    },
+    {
+      "type": "hexcasting:pattern",
+      "op_id": "manifestation:create_list_menu",
+      "anchor": "manifestation:create_list_menu",
+      "input": "list, any",
+      "output": "",
+      "text": "hexcasting.page.manifestation.menus.create_list_menu"
+    },
+    {
+      "type": "hexcasting:pattern",
+      "op_id": "manifestation:create_grid_menu",
+      "anchor": "manifestation:create_grid_menu",
+      "input": "list, any, num",
+      "output": "",
+      "text": "hexcasting.page.manifestation.menus.create_grid_menu"
+    },
+    {
+      "type": "patchouli:text",
+      "text": "hexcasting.page.manifestation.intents_intro"
+    },
+    {
+      "type": "hexcasting:pattern",
+      "op_id": "manifestation:intent_button",
+      "anchor": "manifestation:intent_button",
+      "input": "list, any",
+      "output": "intent",
+      "text": "hexcasting.page.manifestation.intents.intent_button"
+    },
+    {
+      "type": "hexcasting:pattern",
+      "op_id": "manifestation:intent_input",
+      "anchor": "manifestation:intent_input",
+      "input": "any",
+      "output": "intent",
+      "text": "hexcasting.page.manifestation.intents.intent_input"
+    },
+    {
+      "type": "hexcasting:pattern",
+      "op_id": "manifestation:intent_slider",
+      "anchor": "manifestation:intent_slider",
+      "input": "num, num, num, any",
+      "output": "intent",
+      "text": "hexcasting.page.manifestation.intents.intent_slider"
+    },
+    {
+      "type": "hexcasting:pattern",
+      "op_id": "manifestation:intent_section",
+      "anchor": "manifestation:intent_section",
+      "input": "any",
+      "output": "intent",
+      "text": "hexcasting.page.manifestation.intents.intent_section"
+    },
+    {
+      "type": "hexcasting:pattern",
+      "op_id": "manifestation:intent_dropdown",
+      "anchor": "manifestation:intent_dropdown",
+      "input": "list, any",
+      "output": "intent",
+      "text": "hexcasting.page.manifestation.intents.intent_dropdown"
+    }
+  ]
+}
