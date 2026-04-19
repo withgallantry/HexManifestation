@@ -4,6 +4,7 @@ import com.bluup.manifestation.client.ActiveMenuState;
 import com.bluup.manifestation.client.menu.execution.MenuActionSender;
 import com.bluup.manifestation.common.menu.MenuEntry;
 import com.bluup.manifestation.common.menu.MenuPayload;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -14,6 +15,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +58,7 @@ public final class MenuScreen extends Screen {
     private final MenuPayload menu;
     private final InteractionHand hand;
     private final Map<Integer, EditBox> inputBoxes = new LinkedHashMap<>();
+    private final Map<Integer, MenuSlider> sliderBoxes = new LinkedHashMap<>();
     private final Map<Integer, EntryBounds> entryBounds = new LinkedHashMap<>();
     private int animTick;
     private int currentPage;
@@ -81,6 +84,34 @@ public final class MenuScreen extends Screen {
         }
     }
 
+    private final class MenuSlider extends AbstractSliderButton {
+        private final Component label;
+        private final double min;
+        private final double max;
+
+        MenuSlider(int x, int y, int width, int height, Component label, double min, double max, double current) {
+            super(x, y, width, height, Component.empty(), normalize(min, max, current));
+            this.label = label;
+            this.min = min;
+            this.max = max;
+            updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            this.setMessage(Component.literal(label.getString() + ": " + formatValue(getActualValue())));
+        }
+
+        @Override
+        protected void applyValue() {
+            // Value is sampled when dispatching the button.
+        }
+
+        double getActualValue() {
+            return Mth.lerp(this.value, min, max);
+        }
+    }
+
     public MenuScreen(MenuPayload menu, InteractionHand hand) {
         super(menu.title());
         this.menu = menu;
@@ -90,6 +121,7 @@ public final class MenuScreen extends Screen {
     @Override
     protected void init() {
         inputBoxes.clear();
+        sliderBoxes.clear();
         entryBounds.clear();
         effectiveColumns = menu.layout() == MenuPayload.Layout.GRID
             ? computeEffectiveGridColumns(menu.columns())
@@ -242,6 +274,22 @@ public final class MenuScreen extends Screen {
             return;
         }
 
+        if (entry.isSlider()) {
+            MenuSlider slider = new MenuSlider(
+                x,
+                y,
+                width,
+                BUTTON_HEIGHT,
+                entry.label(),
+                entry.sliderMin(),
+                entry.sliderMax(),
+                entry.sliderCurrent()
+            );
+            sliderBoxes.put(index, slider);
+            this.addRenderableWidget(slider);
+            return;
+        }
+
         final MenuEntry captured = entry;
         this.addRenderableWidget(
                 Button.builder(entry.label(), btn -> selectEntry(captured))
@@ -266,15 +314,40 @@ public final class MenuScreen extends Screen {
         }
     }
 
-    private List<String> collectInputValues() {
-        List<String> values = new ArrayList<>();
-        for (EditBox box : inputBoxes.values()) {
-            String value = box.getValue();
-            if (value != null && !value.isEmpty()) {
-                values.add(value);
-            }
-        }
+    private List<MenuActionSender.InputDatum> collectInputValues() {
+        List<MenuActionSender.InputDatum> values = new ArrayList<>();
+
+        inputBoxes.entrySet().stream()
+            .sorted(Comparator.comparingInt(Map.Entry::getKey))
+            .forEach(entry -> {
+                String value = entry.getValue().getValue();
+                if (value != null && !value.isEmpty()) {
+                    values.add(MenuActionSender.InputDatum.string(entry.getKey(), value));
+                }
+            });
+
+        sliderBoxes.entrySet().stream()
+            .sorted(Comparator.comparingInt(Map.Entry::getKey))
+            .forEach(entry -> values.add(
+                MenuActionSender.InputDatum.number(entry.getKey(), entry.getValue().getActualValue())
+            ));
+
+        values.sort(Comparator.comparingInt(MenuActionSender.InputDatum::order));
         return values;
+    }
+
+    private static String formatValue(double value) {
+        if (Math.abs(value - Math.rint(value)) < 1.0e-6) {
+            return Integer.toString((int) Math.rint(value));
+        }
+        return String.format(java.util.Locale.ROOT, "%.2f", value);
+    }
+
+    private static double normalize(double min, double max, double current) {
+        if (max <= min) {
+            return 0.0;
+        }
+        return Mth.clamp((current - min) / (max - min), 0.0, 1.0);
     }
 
     private void spawnClickFlare() {

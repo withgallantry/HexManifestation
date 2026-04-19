@@ -20,6 +20,7 @@ import net.minecraft.network.chat.Component
  *
  * Entry forms:
  *   * Input:  <any iota>
+ *   * Slider: [<min>, <max>, <label>] or [<min>, <max>, <current>, <label>]
  *   * Button: [<action-list>, <label>]
  *
  * Parsing rule:
@@ -121,6 +122,10 @@ internal object MenuReader {
     * Input form:
     *   * <any iota>
      *
+     * Slider forms:
+    *   * [ <double min>, <double max>, <label> ]
+    *   * [ <double min>, <double max>, <double current>, <label> ]
+     *
      * Button form:
      *   * [ <action-list>, <label> ]
      */
@@ -130,6 +135,11 @@ internal object MenuReader {
         }
 
         val parts = buttonIota.list.toList()
+        val slider = tryReadSlider(parts)
+        if (slider != null) {
+            return slider
+        }
+
         if (parts.size != 2) {
             // Not the explicit button shape: treat the whole iota as a label.
             return MenuEntry.input(buttonIota.display())
@@ -163,5 +173,30 @@ internal object MenuReader {
         }
 
         return MenuEntry.button(labelIota.display(), stored)
+    }
+
+    private fun tryReadSlider(parts: List<Iota>): MenuEntry? {
+        if (parts.size != 3 && parts.size != 4) {
+            return null
+        }
+
+        val min = (parts[0] as? DoubleIota)?.double ?: return null
+        val max = (parts[1] as? DoubleIota)?.double ?: return null
+        val (current, labelIota) = if (parts.size == 4) {
+            val c = (parts[2] as? DoubleIota)?.double ?: return null
+            Pair(c, parts[3])
+        } else {
+            Pair(null, parts[2])
+        }
+
+        if (min > max) {
+            return null
+        }
+
+        if (current != null && (current < min || current > max)) {
+            throw MishapInvalidIota.of(DoubleIota(current), 0, "double.between", min, max)
+        }
+
+        return MenuEntry.slider(labelIota.display(), min, max, current)
     }
 }

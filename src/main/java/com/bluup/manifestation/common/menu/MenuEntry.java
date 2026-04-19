@@ -14,6 +14,7 @@ import java.util.Objects;
  * <ul>
  *   <li>{@link Kind#BUTTON}: dispatches its action list when clicked</li>
  *   <li>{@link Kind#INPUT}: renders a text input field with this label as hint</li>
+ *   <li>{@link Kind#SLIDER}: renders a numeric slider with min/max/current</li>
  * </ul>
  *
  * <p>For button entries, the {@code actions} list preserves order: iotas are
@@ -22,25 +23,48 @@ import java.util.Objects;
 public final class MenuEntry {
     public enum Kind {
         BUTTON,
-        INPUT
+        INPUT,
+        SLIDER
     }
 
     private final Kind kind;
     private final Component label;
     private final List<StoredIota> actions;
+    private final double sliderMin;
+    private final double sliderMax;
+    private final boolean sliderHasCurrent;
+    private final double sliderCurrent;
 
-    public MenuEntry(Kind kind, Component label, List<StoredIota> actions) {
+    public MenuEntry(
+            Kind kind,
+            Component label,
+            List<StoredIota> actions,
+            double sliderMin,
+            double sliderMax,
+            boolean sliderHasCurrent,
+            double sliderCurrent
+    ) {
         this.kind = Objects.requireNonNull(kind, "kind");
         this.label = Objects.requireNonNull(label, "label");
         this.actions = List.copyOf(actions);
+        this.sliderMin = sliderMin;
+        this.sliderMax = sliderMax;
+        this.sliderHasCurrent = sliderHasCurrent;
+        this.sliderCurrent = sliderCurrent;
     }
 
     public static MenuEntry button(Component label, List<StoredIota> actions) {
-        return new MenuEntry(Kind.BUTTON, label, actions);
+        return new MenuEntry(Kind.BUTTON, label, actions, 0.0, 0.0, false, 0.0);
     }
 
     public static MenuEntry input(Component label) {
-        return new MenuEntry(Kind.INPUT, label, List.of());
+        return new MenuEntry(Kind.INPUT, label, List.of(), 0.0, 0.0, false, 0.0);
+    }
+
+    public static MenuEntry slider(Component label, double min, double max, Double current) {
+        boolean hasCurrent = current != null;
+        double currentValue = hasCurrent ? current : min;
+        return new MenuEntry(Kind.SLIDER, label, List.of(), min, max, hasCurrent, currentValue);
     }
 
     public Kind kind() {
@@ -55,12 +79,32 @@ public final class MenuEntry {
         return kind == Kind.INPUT;
     }
 
+    public boolean isSlider() {
+        return kind == Kind.SLIDER;
+    }
+
     public Component label() {
         return label;
     }
 
     public List<StoredIota> actions() {
         return actions;
+    }
+
+    public double sliderMin() {
+        return sliderMin;
+    }
+
+    public double sliderMax() {
+        return sliderMax;
+    }
+
+    public boolean sliderHasCurrent() {
+        return sliderHasCurrent;
+    }
+
+    public double sliderCurrent() {
+        return sliderCurrent;
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -71,6 +115,16 @@ public final class MenuEntry {
             for (StoredIota a : actions) {
                 a.write(buf);
             }
+            return;
+        }
+
+        if (kind == Kind.SLIDER) {
+            buf.writeDouble(sliderMin);
+            buf.writeDouble(sliderMax);
+            buf.writeBoolean(sliderHasCurrent);
+            if (sliderHasCurrent) {
+                buf.writeDouble(sliderCurrent);
+            }
         }
     }
 
@@ -79,6 +133,14 @@ public final class MenuEntry {
         Component label = buf.readComponent();
         if (kind == Kind.INPUT) {
             return MenuEntry.input(label);
+        }
+
+        if (kind == Kind.SLIDER) {
+            double min = buf.readDouble();
+            double max = buf.readDouble();
+            boolean hasCurrent = buf.readBoolean();
+            Double current = hasCurrent ? buf.readDouble() : null;
+            return MenuEntry.slider(label, min, max, current);
         }
 
         int n = buf.readVarInt();

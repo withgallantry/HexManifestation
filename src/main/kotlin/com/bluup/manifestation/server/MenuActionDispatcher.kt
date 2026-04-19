@@ -1,6 +1,7 @@
 package com.bluup.manifestation.server
 
 import at.petrak.hexcasting.api.casting.eval.vm.CastingVM
+import at.petrak.hexcasting.api.casting.iota.DoubleIota
 import at.petrak.hexcasting.api.casting.iota.Iota
 import at.petrak.hexcasting.api.casting.iota.IotaType
 import at.petrak.hexcasting.common.lib.hex.HexIotaTypes
@@ -31,6 +32,28 @@ import java.lang.reflect.Constructor
  * result. Everything the player built up with earlier casts remains.
  */
 object MenuActionDispatcher {
+
+    data class InputDatum(
+        val order: Int,
+        val kind: Kind,
+        val stringValue: String,
+        val doubleValue: Double
+    ) {
+        enum class Kind {
+            STRING,
+            DOUBLE
+        }
+
+        companion object {
+            fun string(order: Int, value: String): InputDatum {
+                return InputDatum(order, Kind.STRING, value, 0.0)
+            }
+
+            fun number(order: Int, value: Double): InputDatum {
+                return InputDatum(order, Kind.DOUBLE, "", value)
+            }
+        }
+    }
 
     private val possibleStringIotaClasses = listOf(
         "ram.talia.moreiotas.casting.iota.StringIota",
@@ -66,12 +89,12 @@ object MenuActionDispatcher {
      *
      * @param player the player who clicked the button
      * @param hand   which hand is holding the casting item
-     * @param inputStrings non-empty input field values in menu order
+     * @param inputs typed input values in menu order
      * @param iotas  the iotas to dispatch in order, as deserialized from the
      *               client-sent packet via [IotaType]
      */
     @JvmStatic
-    fun dispatch(player: ServerPlayer, hand: InteractionHand, inputStrings: List<String>, iotas: List<Iota>) {
+    fun dispatch(player: ServerPlayer, hand: InteractionHand, inputs: List<InputDatum>, iotas: List<Iota>) {
         if (iotas.isEmpty()) {
             Manifestation.LOGGER.info("MenuActionDispatcher: empty action list, nothing to do")
             return
@@ -88,7 +111,7 @@ object MenuActionDispatcher {
         val vm: CastingVM = IXplatAbstractions.INSTANCE.getStaffcastVM(player, hand)
         val world = player.serverLevel()
 
-        val inputIotas = toInputIotas(inputStrings, world)
+        val inputIotas = toInputIotas(inputs, world)
         if (inputIotas.isNotEmpty()) {
             val newStack = vm.image.stack.toMutableList()
             newStack.addAll(inputIotas)
@@ -123,18 +146,27 @@ object MenuActionDispatcher {
         }
     }
 
-    private fun toInputIotas(rawInputs: List<String>, world: ServerLevel): List<Iota> {
-        val normalized = rawInputs.filter { it.isNotEmpty() }
-        if (normalized.isEmpty()) {
+    private fun toInputIotas(rawInputs: List<InputDatum>, world: ServerLevel): List<Iota> {
+        if (rawInputs.isEmpty()) {
             return listOf()
         }
 
         val out = mutableListOf<Iota>()
-        for (text in normalized) {
+        for (input in rawInputs.sortedBy { it.order }) {
             try {
-                val built = createStringIota(text, world)
-                if (built != null) {
-                    out.add(built)
+                when (input.kind) {
+                    InputDatum.Kind.STRING -> {
+                        if (input.stringValue.isNotEmpty()) {
+                            val built = createStringIota(input.stringValue, world)
+                            if (built != null) {
+                                out.add(built)
+                            }
+                        }
+                    }
+
+                    InputDatum.Kind.DOUBLE -> {
+                        out.add(DoubleIota(input.doubleValue))
+                    }
                 }
             } catch (t: Throwable) {
                 Manifestation.LOGGER.warn(

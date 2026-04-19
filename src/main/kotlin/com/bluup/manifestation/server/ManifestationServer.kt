@@ -9,6 +9,7 @@ import at.petrak.hexcasting.common.lib.hex.HexActions
 import com.bluup.manifestation.Manifestation
 import com.bluup.manifestation.common.ManifestationNetworking
 import com.bluup.manifestation.common.menu.MenuPayload
+import com.bluup.manifestation.client.menu.execution.MenuActionSender
 import com.bluup.manifestation.server.action.OpCreateGridMenu
 import com.bluup.manifestation.server.action.OpCreateListMenu
 import net.fabricmc.api.ModInitializer
@@ -85,7 +86,21 @@ object ManifestationServer : ModInitializer {
         ) { server, player, _, buf, _ ->
             val hand = buf.readEnum(InteractionHand::class.java)
             val inputCount = buf.readVarInt()
-            val inputStrings = (0 until inputCount).map { buf.readUtf() }
+            val inputs = mutableListOf<MenuActionDispatcher.InputDatum>()
+            repeat(inputCount) {
+                val order = buf.readVarInt()
+                when (buf.readEnum(MenuActionSender.InputKind::class.java)) {
+                    MenuActionSender.InputKind.STRING -> {
+                        val value = buf.readUtf()
+                        inputs.add(MenuActionDispatcher.InputDatum.string(order, value))
+                    }
+
+                    MenuActionSender.InputKind.DOUBLE -> {
+                        val value = buf.readDouble()
+                        inputs.add(MenuActionDispatcher.InputDatum.number(order, value))
+                    }
+                }
+            }
             val count = buf.readVarInt()
             val tags = (0 until count).map { buf.readNbt() }
             // Execute on the server thread — the packet arrives on the network
@@ -105,7 +120,7 @@ object ManifestationServer : ModInitializer {
                         null
                     }
                 }
-                MenuActionDispatcher.dispatch(player, hand, inputStrings, iotas)
+                MenuActionDispatcher.dispatch(player, hand, inputs, iotas)
             }
         }
     }

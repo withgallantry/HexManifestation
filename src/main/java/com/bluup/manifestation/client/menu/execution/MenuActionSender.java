@@ -35,10 +35,25 @@ import java.util.List;
  */
 public final class MenuActionSender {
 
+    public enum InputKind {
+        STRING,
+        DOUBLE
+    }
+
+    public record InputDatum(int order, InputKind kind, String stringValue, double doubleValue) {
+        public static InputDatum string(int order, String value) {
+            return new InputDatum(order, InputKind.STRING, value, 0.0);
+        }
+
+        public static InputDatum number(int order, double value) {
+            return new InputDatum(order, InputKind.DOUBLE, "", value);
+        }
+    }
+
     private MenuActionSender() {
     }
 
-    public static void send(MenuEntry entry, InteractionHand hand, List<String> inputs) {
+    public static void send(MenuEntry entry, InteractionHand hand, List<InputDatum> inputs) {
         if (!entry.isButton()) {
             Manifestation.LOGGER.debug(
                     "MenuActionSender: entry '{}' is not a button, ignoring send",
@@ -61,8 +76,14 @@ public final class MenuActionSender {
         FriendlyByteBuf buf = PacketByteBufs.create();
         buf.writeEnum(hand);
         buf.writeVarInt(inputs.size());
-        for (String input : inputs) {
-            buf.writeUtf(input);
+        for (InputDatum input : inputs) {
+            buf.writeVarInt(input.order());
+            buf.writeEnum(input.kind());
+            if (input.kind() == InputKind.STRING) {
+                buf.writeUtf(input.stringValue());
+            } else {
+                buf.writeDouble(input.doubleValue());
+            }
         }
         buf.writeVarInt(actions.size());
         for (StoredIota stored : actions) {
