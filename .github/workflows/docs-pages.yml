@@ -39,6 +39,42 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[dev]
 
+      - name: Normalize exported hexdoc URLs for Pages
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          pages_url = os.environ["GITHUB_PAGES_URL"].rstrip("/")
+          files = [
+            Path("doc/src/hexdoc_manifestation/_export/generated/manifestation.hexdoc.json"),
+            Path(".hexdoc/manifestation.hexdoc.json"),
+          ]
+
+          for file in files:
+            if not file.exists():
+              continue
+
+            data = json.loads(file.read_text(encoding="utf-8"))
+            book_url = str(data.get("book_url", ""))
+            asset_url = str(data.get("asset_url", ""))
+
+            if "/_site/dst/docs/" in book_url:
+              suffix = book_url.split("/_site/dst/docs/", 1)[1].lstrip("/")
+              data["book_url"] = f"{pages_url}/{suffix}"
+            elif "localhost" in book_url or "127.0.0.1" in book_url:
+              path = urlsplit(book_url).path.lstrip("/")
+              data["book_url"] = f"{pages_url}/{path}" if path else pages_url
+
+            if asset_url:
+              data["asset_url"] = pages_url
+
+            file.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+            print(f"Normalized URLs in {file}")
+          PY
+
       - name: Build docs
         run: |
           hexdoc build --release
