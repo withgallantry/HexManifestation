@@ -78,7 +78,7 @@ jobs:
       - name: Build docs
         run: |
           hexdoc build --release
-          hexdoc merge --release
+          hexdoc merge
 
       - name: Upload docs artifact
         uses: actions/upload-pages-artifact@v3
