@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "manifestation",
+  "version": "0.2.0",
+  "name": "Manifestation",
+  "description": "A companion mod for Hex Casting that adds menu-creation patterns. Stack up a menu definition, cast CREATE_LIST_MENU or CREATE_GRID_MENU, and an interactive HUD opens — click a button to cast its stored pattern list as a normal Hex.",
+  "authors": [
+    "You"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "entrypoints": {
+    "main": [
+      {
+        "adapter": "kotlin",
+        "value": "com.bluup.manifestation.server.ManifestationServer"
+      }
+    ],
+    "client": [
+      "com.bluup.manifestation.client.ManifestationClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "fabric-api": "*",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "hexcasting": "*",
+    "fabric-language-kotlin": "*"
+  }
+}

@@ -1,0 +1,503 @@
+package com.bluup.manifestation.client.menu.ui;
+
+import com.bluup.manifestation.client.ActiveMenuState;
+import com.bluup.manifestation.client.menu.execution.MenuActionSender;
+import com.bluup.manifestation.common.menu.MenuEntry;
+import com.bluup.manifestation.common.menu.MenuPayload;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * HUD-style modal that renders the menu described by a {@link MenuPayload}.
+ *
+ * <p>Layout behavior:
+ * <ul>
+ *   <li>{@code LIST} — one column, buttons stacked top-to-bottom. Fixed
+ *       reasonable width; scales panel height to fit all entries.</li>
+ *   <li>{@code GRID} — player-specified column count, buttons laid out
+ *       left-to-right top-to-bottom. Panel width scales with column count.</li>
+ * </ul>
+ *
+ * <p>Not a pause screen — world keeps rendering behind the modal, reinforcing
+ * the "magical HUD" feel. Any interaction that closes the screen clears
+ * {@link ActiveMenuState}; "only one menu at a time" and "single-use" both
+ * fall out of that.
+ */
+public final class MenuScreen extends Screen {
+
+    // Shared layout constants.
+    private static final int BUTTON_HEIGHT = 20;
+    private static final int BUTTON_SPACING = 4;
+    private static final int TITLE_MARGIN = 8;
+    private static final int PANEL_PADDING = 8;
+
+    // LIST-specific
+    private static final int LIST_BUTTON_WIDTH = 200;
+
+    // GRID-specific
+    private static final int GRID_BUTTON_WIDTH = 120;
+    private static final int INTRO_TRACE_TICKS = 12;
+
+    private final MenuPayload menu;
+    private final InteractionHand hand;
+    private final Map<Integer, EditBox> inputBoxes = new LinkedHashMap<>();
+    private final Map<Integer, EntryBounds> entryBounds = new LinkedHashMap<>();
+    private int animTick;
+
+    private static final class EntryBounds {
+        final int x;
+        final int y;
+        final int w;
+        final int h;
+
+        EntryBounds(int x, int y, int w, int h) {
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+        }
+
+        boolean contains(int px, int py) {
+            return px >= x && px < x + w && py >= y && py < y + h;
+        }
+    }
+
+    public MenuScreen(MenuPayload menu, InteractionHand hand) {
+        super(menu.title());
+        this.menu = menu;
+        this.hand = hand;
+    }
+
+    @Override
+    protected void init() {
+        inputBoxes.clear();
+        entryBounds.clear();
+        List<MenuEntry> entries = menu.entries();
+
+        switch (menu.layout()) {
+            case LIST -> layoutList(entries);
+            case GRID -> layoutGrid(entries, menu.columns());
+        }
+    }
+
+    private void layoutList(List<MenuEntry> entries) {
+        int panelWidth = LIST_BUTTON_WIDTH + PANEL_PADDING * 2;
+        int panelHeight = panelHeightFor(entries.size(), 1);
+
+        int panelX = (this.width - panelWidth) / 2;
+        int panelY = (this.height - panelHeight) / 2;
+
+        int buttonX = panelX + PANEL_PADDING;
+        int buttonY = panelY + PANEL_PADDING + this.font.lineHeight + TITLE_MARGIN;
+
+        for (int i = 0; i < entries.size(); i++) {
+            addEntryWidget(i, entries.get(i), buttonX, buttonY, LIST_BUTTON_WIDTH);
+            buttonY += BUTTON_HEIGHT + BUTTON_SPACING;
+        }
+    }
+
+    private void layoutGrid(List<MenuEntry> entries, int columns) {
+        int rows = (entries.size() + columns - 1) / columns;
+
+        int innerWidth = columns * GRID_BUTTON_WIDTH + (columns - 1) * BUTTON_SPACING;
+        int panelWidth = innerWidth + PANEL_PADDING * 2;
+        int panelHeight = panelHeightFor(rows, 1);
+
+        int panelX = (this.width - panelWidth) / 2;
+        int panelY = (this.height - panelHeight) / 2;
+
+        int rowStartY = panelY + PANEL_PADDING + this.font.lineHeight + TITLE_MARGIN;
+
+        for (int i = 0; i < entries.size(); i++) {
+            int row = i / columns;
+            int col = i % columns;
+            int bx = panelX + PANEL_PADDING + col * (GRID_BUTTON_WIDTH + BUTTON_SPACING);
+            int by = rowStartY + row * (BUTTON_HEIGHT + BUTTON_SPACING);
+            addEntryWidget(i, entries.get(i), bx, by, GRID_BUTTON_WIDTH);
+        }
+    }
+
+    /**
+     * Panel height calculation shared between layouts. Takes row count, not
+     * entry count, so GRID can account for wrapping.
+     */
+    private int panelHeightFor(int rows, int _unused) {
+        int buttonsHeight = rows * BUTTON_HEIGHT + Math.max(0, rows - 1) * BUTTON_SPACING;
+        return PANEL_PADDING * 2 + this.font.lineHeight + TITLE_MARGIN + buttonsHeight;
+    }
+
+    private void addEntryWidget(int index, MenuEntry entry, int x, int y, int width) {
+        entryBounds.put(index, new EntryBounds(x, y, width, BUTTON_HEIGHT));
+
+        if (entry.isInput()) {
+            EditBox box = new EditBox(this.font, x, y, width, BUTTON_HEIGHT, entry.label());
+            box.setHint(entry.label());
+            inputBoxes.put(index, box);
+            this.addRenderableWidget(box);
+            return;
+        }
+
+        final MenuEntry captured = entry;
+        this.addRenderableWidget(
+                Button.builder(entry.label(), btn -> selectEntry(captured))
+                        .bounds(x, y, width, BUTTON_HEIGHT)
+                        .build()
+        );
+    }
+
+    private void selectEntry(MenuEntry entry) {
+        if (!entry.isButton()) {
+            return;
+        }
+
+        spawnClickFlare();
+
+        // Clear state BEFORE dispatching, to be safe if execution ever
+        // re-enters the screen loop mid-dispatch.
+        ActiveMenuState.get().clear();
+        MenuActionSender.send(entry, this.hand, collectInputValues());
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(null);
+        }
+    }
+
+    private List<String> collectInputValues() {
+        List<String> values = new ArrayList<>();
+        for (EditBox box : inputBoxes.values()) {
+            String value = box.getValue();
+            if (value != null && !value.isEmpty()) {
+                values.add(value);
+            }
+        }
+        return values;
+    }
+
+    private void spawnClickFlare() {
+        if (this.minecraft == null || this.minecraft.level == null || this.minecraft.player == null) {
+            return;
+        }
+
+        double px = this.minecraft.player.getX();
+        double py = this.minecraft.player.getY() + 1.2;
+        double pz = this.minecraft.player.getZ();
+
+        for (int i = 0; i < 18; i++) {
+            double vx = (this.minecraft.level.random.nextDouble() - 0.5) * 0.12;
+            double vy = 0.02 + this.minecraft.level.random.nextDouble() * 0.08;
+            double vz = (this.minecraft.level.random.nextDouble() - 0.5) * 0.12;
+            this.minecraft.level.addParticle(ParticleTypes.ENCHANT, px, py, pz, vx, vy, vz);
+        }
+
+        for (int i = 0; i < 6; i++) {
+            double vx = (this.minecraft.level.random.nextDouble() - 0.5) * 0.06;
+            double vy = 0.01 + this.minecraft.level.random.nextDouble() * 0.04;
+            double vz = (this.minecraft.level.random.nextDouble() - 0.5) * 0.06;
+            this.minecraft.level.addParticle(ParticleTypes.END_ROD, px, py, pz, vx, vy, vz);
+        }
+    }
+
+    @Override
+    public void onClose() {
+        // Any dismissal path — Esc, screen-replacement, whatever — clears state.
+        ActiveMenuState.get().clear();
+        super.onClose();
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        animTick++;
+    }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(graphics);
+
+        // Recompute panel bounds for the title overlay. We can't stash these
+        // from init() because the screen dimensions could theoretically change
+        // mid-life (resize).
+        List<MenuEntry> entries = menu.entries();
+        int columns = menu.layout() == MenuPayload.Layout.GRID ? menu.columns() : 1;
+        int rows = (entries.size() + columns - 1) / columns;
+
+        int innerWidth = columns == 1
+                ? LIST_BUTTON_WIDTH
+                : columns * GRID_BUTTON_WIDTH + (columns - 1) * BUTTON_SPACING;
+        int panelWidth = innerWidth + PANEL_PADDING * 2;
+        int panelHeight = panelHeightFor(rows, 1);
+
+        int panelX = (this.width - panelWidth) / 2;
+        int panelY = (this.height - panelHeight) / 2;
+
+        float pulse = (Mth.sin((animTick + partialTick) / 10.0f) + 1.0f) * 0.5f;
+        float introProgress = Mth.clamp((animTick + partialTick) / INTRO_TRACE_TICKS, 0.0f, 1.0f);
+
+        drawArcanePanel(graphics, panelX, panelY, panelWidth, panelHeight, pulse);
+        drawOpeningTrace(graphics, panelX, panelY, panelWidth, panelHeight, introProgress, pulse);
+        drawEntryBackplates(graphics, panelX, panelY, entries, columns);
+        drawHoverShimmer(graphics, mouseX, mouseY, pulse);
+        drawSigils(graphics, panelX, panelY, panelWidth, panelHeight, pulse);
+
+        // Title centered at the top of the panel.
+        Component title = menu.title();
+        int titleWidth = this.font.width(title);
+        int titleY = panelY + PANEL_PADDING;
+        int titleX = panelX + (panelWidth - titleWidth) / 2;
+
+        int dividerY = titleY + this.font.lineHeight + 3;
+        int glowAlpha = 38 + (int) (30 * pulse);
+        int dividerGlow = (glowAlpha << 24) | themed(0xA06BFF, 0x6FC8FF);
+        graphics.fill(panelX + PANEL_PADDING + 8, dividerY, panelX + panelWidth - PANEL_PADDING - 8, dividerY + 1, dividerGlow);
+        graphics.fill(panelX + panelWidth / 2 - 1, dividerY - 2, panelX + panelWidth / 2 + 2, dividerY + 3, themed(0xCCBDA1FF, 0xCCAEF2FF));
+
+        graphics.drawString(
+                this.font,
+                title,
+                titleX,
+                titleY,
+                themed(0xFFEBDFFF, 0xFFDFF5FF),
+                true
+        );
+
+        if (introProgress < 1.0f) {
+            int veilAlpha = (int) (88 * (1.0f - introProgress));
+            int veil = (veilAlpha << 24) | themed(0x1E1034, 0x0E2A3B);
+            graphics.fill(panelX + 2, panelY + 2, panelX + panelWidth - 2, panelY + panelHeight - 2, veil);
+        }
+
+        super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    private void drawOpeningTrace(
+        GuiGraphics graphics,
+        int panelX,
+        int panelY,
+        int panelWidth,
+        int panelHeight,
+        float progress,
+        float pulse
+    ) {
+        if (progress <= 0.0f) {
+            return;
+        }
+
+        int cx = panelX + panelWidth / 2;
+        int cy = panelY + panelHeight / 2;
+        int radius = Math.min(panelWidth, panelHeight) / 2 + 10;
+
+        int[] xs = new int[6];
+        int[] ys = new int[6];
+        for (int i = 0; i < 6; i++) {
+            double angle = Math.toRadians((60.0 * i) - 30.0);
+            xs[i] = cx + (int) Math.round(Math.cos(angle) * radius);
+            ys[i] = cy + (int) Math.round(Math.sin(angle) * radius);
+        }
+
+        float tracedSegments = progress * 6.0f;
+        int glowAlpha = 35 + (int) (80 * pulse);
+        int lineAlpha = 95 + (int) (120 * progress);
+        int glowColor = (glowAlpha << 24) | themed(0xC99CFF, 0x94E7FF);
+        int lineColor = (lineAlpha << 24) | themed(0xF0DEFF, 0xD8F6FF);
+
+        for (int seg = 0; seg < 6; seg++) {
+            float segAmount = Mth.clamp(tracedSegments - seg, 0.0f, 1.0f);
+            if (segAmount <= 0.0f) {
+                continue;
+            }
+
+            int next = (seg + 1) % 6;
+            int x2 = (int) Math.round(Mth.lerp(segAmount, xs[seg], xs[next]));
+            int y2 = (int) Math.round(Mth.lerp(segAmount, ys[seg], ys[next]));
+
+            drawPixelLine(graphics, xs[seg], ys[seg], x2, y2, glowColor, 1);
+            drawPixelLine(graphics, xs[seg], ys[seg], x2, y2, lineColor, 0);
+        }
+
+        int coreAlpha = 45 + (int) (120 * progress);
+        int coreColor = (coreAlpha << 24) | themed(0xD4BAFF, 0xB8ECFF);
+        graphics.fill(cx - 1, cy - 1, cx + 2, cy + 2, coreColor);
+    }
+
+    private void drawArcanePanel(GuiGraphics graphics, int panelX, int panelY, int panelWidth, int panelHeight, float pulse) {
+        int glowAlpha = 24 + (int) (40 * pulse);
+        int glow = (glowAlpha << 24) | themed(0x8C5DFF, 0x4FC7FF);
+
+        graphics.fill(panelX - 5, panelY - 5, panelX + panelWidth + 5, panelY + panelHeight + 5, glow);
+        graphics.fill(panelX - 2, panelY - 2, panelX + panelWidth + 2, panelY + panelHeight + 2, themed(0x3F221436, 0x3F122A37));
+
+        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, themed(0xD0130D1F, 0xD00D1B2B));
+        graphics.fill(panelX + 3, panelY + 3, panelX + panelWidth - 3, panelY + panelHeight - 3, themed(0xCC1E1433, 0xCC142A3D));
+
+        int borderA = themed(0xFF9E79FF, 0xFF7DD8FF);
+        int borderB = themed(0xFF5D3AA1, 0xFF316F92);
+        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, borderA);
+        graphics.fill(panelX, panelY + panelHeight - 1, panelX + panelWidth, panelY + panelHeight, borderA);
+        graphics.fill(panelX, panelY, panelX + 1, panelY + panelHeight, borderA);
+        graphics.fill(panelX + panelWidth - 1, panelY, panelX + panelWidth, panelY + panelHeight, borderA);
+
+        graphics.fill(panelX + 1, panelY + 1, panelX + panelWidth - 1, panelY + 2, borderB);
+        graphics.fill(panelX + 1, panelY + panelHeight - 2, panelX + panelWidth - 1, panelY + panelHeight - 1, borderB);
+        graphics.fill(panelX + 1, panelY + 1, panelX + 2, panelY + panelHeight - 1, borderB);
+        graphics.fill(panelX + panelWidth - 2, panelY + 1, panelX + panelWidth - 1, panelY + panelHeight - 1, borderB);
+
+        drawCornerNotch(graphics, panelX, panelY, 6, themed(0xFFBCA6FF, 0xFFB6EDFF));
+        drawCornerNotch(graphics, panelX + panelWidth, panelY, 6, themed(0xFFBCA6FF, 0xFFB6EDFF));
+        drawCornerNotch(graphics, panelX, panelY + panelHeight, 6, themed(0xFFBCA6FF, 0xFFB6EDFF));
+        drawCornerNotch(graphics, panelX + panelWidth, panelY + panelHeight, 6, themed(0xFFBCA6FF, 0xFFB6EDFF));
+    }
+
+    private void drawEntryBackplates(GuiGraphics graphics, int panelX, int panelY, List<MenuEntry> entries, int columns) {
+        int rowStartY = panelY + PANEL_PADDING + this.font.lineHeight + TITLE_MARGIN;
+        for (int i = 0; i < entries.size(); i++) {
+            MenuEntry entry = entries.get(i);
+            int x;
+            int y;
+            int w;
+
+            if (columns == 1) {
+                x = panelX + PANEL_PADDING;
+                y = rowStartY + i * (BUTTON_HEIGHT + BUTTON_SPACING);
+                w = LIST_BUTTON_WIDTH;
+            } else {
+                int row = i / columns;
+                int col = i % columns;
+                x = panelX + PANEL_PADDING + col * (GRID_BUTTON_WIDTH + BUTTON_SPACING);
+                y = rowStartY + row * (BUTTON_HEIGHT + BUTTON_SPACING);
+                w = GRID_BUTTON_WIDTH;
+            }
+
+            int base = entry.isInput()
+                ? themed(0x663A2A57, 0x66233C57)
+                : themed(0x55331752, 0x55274E66);
+            int frame = entry.isInput()
+                ? themed(0xFF7FB8FF, 0xFF94E4FF)
+                : themed(0xFFC59BFF, 0xFF8FCFFF);
+            int rune = entry.isInput()
+                ? themed(0xAA9BD3FF, 0xAACAF1FF)
+                : themed(0xAADDCCFF, 0xAA9AE8FF);
+
+            graphics.fill(x - 1, y - 1, x + w + 1, y + BUTTON_HEIGHT + 1, base);
+            graphics.fill(x - 1, y - 1, x + w + 1, y, frame);
+            graphics.fill(x - 1, y + BUTTON_HEIGHT, x + w + 1, y + BUTTON_HEIGHT + 1, frame);
+            graphics.fill(x - 1, y - 1, x, y + BUTTON_HEIGHT + 1, frame);
+            graphics.fill(x + w, y - 1, x + w + 1, y + BUTTON_HEIGHT + 1, frame);
+
+            int midY = y + BUTTON_HEIGHT / 2;
+            graphics.fill(x + 4, midY, x + 8, midY + 1, rune);
+            graphics.fill(x + w - 8, midY, x + w - 4, midY + 1, rune);
+        }
+    }
+
+    private void drawHoverShimmer(GuiGraphics graphics, int mouseX, int mouseY, float pulse) {
+        for (EntryBounds bounds : entryBounds.values()) {
+            if (!bounds.contains(mouseX, mouseY)) {
+                continue;
+            }
+
+            int shimmerAlpha = 35 + (int) (45 * pulse);
+            int shimmer = (shimmerAlpha << 24) | themed(0xE4C3FF, 0xA6EAFF);
+
+            int cycle = bounds.w + 12;
+            int localTick = animTick % cycle;
+            int sweepX = bounds.x - 6 + localTick;
+            int x0 = Math.max(bounds.x, sweepX);
+            int x1 = Math.min(bounds.x + bounds.w, sweepX + 8);
+            if (x1 > x0) {
+                graphics.fill(x0, bounds.y - 1, x1, bounds.y + bounds.h + 1, shimmer);
+            }
+
+            int frameAlpha = 85 + (int) (80 * pulse);
+            int frame = (frameAlpha << 24) | themed(0xB285FF, 0x84DFFF);
+            graphics.fill(bounds.x - 2, bounds.y - 2, bounds.x + bounds.w + 2, bounds.y - 1, frame);
+            graphics.fill(bounds.x - 2, bounds.y + bounds.h + 1, bounds.x + bounds.w + 2, bounds.y + bounds.h + 2, frame);
+            graphics.fill(bounds.x - 2, bounds.y - 2, bounds.x - 1, bounds.y + bounds.h + 2, frame);
+            graphics.fill(bounds.x + bounds.w + 1, bounds.y - 2, bounds.x + bounds.w + 2, bounds.y + bounds.h + 2, frame);
+        }
+    }
+
+    private void drawSigils(GuiGraphics graphics, int panelX, int panelY, int panelWidth, int panelHeight, float pulse) {
+        int sigilColor = ((70 + (int) (40 * pulse)) << 24) | themed(0xC7A2FF, 0x98E4FF);
+        int crossColor = ((120 + (int) (60 * pulse)) << 24) | themed(0xE8D6FF, 0xCDF5FF);
+
+        drawSigil(graphics, panelX - 10, panelY - 10, sigilColor, crossColor);
+        drawSigil(graphics, panelX + panelWidth + 10, panelY - 10, sigilColor, crossColor);
+        drawSigil(graphics, panelX - 10, panelY + panelHeight + 10, sigilColor, crossColor);
+        drawSigil(graphics, panelX + panelWidth + 10, panelY + panelHeight + 10, sigilColor, crossColor);
+    }
+
+    private void drawSigil(GuiGraphics graphics, int cx, int cy, int ringColor, int coreColor) {
+        int[] sprite = {
+            0b0011100,
+            0b0100010,
+            0b1001001,
+            0b1010101,
+            0b1001001,
+            0b0100010,
+            0b0011100
+        };
+        drawRuneSprite(graphics, cx - 3, cy - 3, ringColor, sprite);
+
+        graphics.fill(cx - 1, cy - 1, cx + 1, cy + 1, coreColor);
+    }
+
+    private void drawRuneSprite(GuiGraphics graphics, int x, int y, int color, int[] rows) {
+        for (int row = 0; row < rows.length; row++) {
+            int bits = rows[row];
+            for (int col = 0; col < 7; col++) {
+                int mask = 1 << (6 - col);
+                if ((bits & mask) != 0) {
+                    graphics.fill(x + col, y + row, x + col + 1, y + row + 1, color);
+                }
+            }
+        }
+    }
+
+    private void drawPixelLine(GuiGraphics graphics, int x1, int y1, int x2, int y2, int color, int thickness) {
+        int dx = x2 - x1;
+        int dy = y2 - y1;
+        int steps = Math.max(Math.abs(dx), Math.abs(dy));
+        if (steps == 0) {
+            graphics.fill(x1 - thickness, y1 - thickness, x1 + thickness + 1, y1 + thickness + 1, color);
+            return;
+        }
+
+        for (int i = 0; i <= steps; i++) {
+            float t = i / (float) steps;
+            int px = Math.round(Mth.lerp(t, x1, x2));
+            int py = Math.round(Mth.lerp(t, y1, y2));
+            graphics.fill(px - thickness, py - thickness, px + thickness + 1, py + thickness + 1, color);
+        }
+    }
+
+    private int themed(int ritual, int scholar) {
+        return menu.theme() == MenuPayload.Theme.RITUAL ? ritual : scholar;
+    }
+
+    private void drawCornerNotch(GuiGraphics graphics, int x, int y, int size, int color) {
+        int sx = x < this.width / 2 ? 1 : -1;
+        int sy = y < this.height / 2 ? 1 : -1;
+
+        for (int i = 0; i < size; i++) {
+            int x1 = x + (sx > 0 ? i : -i - 1);
+            int y1 = y + (sy > 0 ? i : -i - 1);
+            graphics.fill(x1, y, x1 + 1, y + sy, color);
+            graphics.fill(x, y1, x + sx, y1 + 1, color);
+        }
+    }
+}
