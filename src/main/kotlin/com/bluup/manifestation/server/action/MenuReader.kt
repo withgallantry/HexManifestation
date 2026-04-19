@@ -8,33 +8,26 @@ import at.petrak.hexcasting.api.casting.mishaps.MishapNotEnoughArgs
 import com.bluup.manifestation.Manifestation
 import com.bluup.manifestation.common.menu.MenuEntry
 import com.bluup.manifestation.common.menu.StoredIota
+import com.bluup.manifestation.server.iota.UiButtonIota
+import com.bluup.manifestation.server.iota.UiInputIota
+import com.bluup.manifestation.server.iota.UiSliderIota
 import net.minecraft.network.chat.Component
 
 /**
  * Shared iota-reading logic for the two menu operators.
  *
  * Error policy:
- *   * Title wrong type / missing              -> hard mishap (MishapInvalidIota)
- *   * Outer button-list wrong type / missing  -> hard mishap
- *   * Individual malformed button             -> skip, keep going
+ *   * Title wrong type / missing               -> hard mishap (MishapInvalidIota)
+ *   * Outer entry-list wrong type / missing    -> hard mishap
+ *   * Individual malformed entry               -> skip, keep going
  *
- * Entry forms:
- *   * Input:  <any iota>
- *   * Slider: [<min>, <max>, <label>] or [<min>, <max>, <current>, <label>]
- *   * Button: [<action-list>, <label>]
+ * Entry model:
+ *   * UiButtonIota(label, actions)
+ *   * UiInputIota(label)
+ *   * UiSliderIota(label, min, max, current?)
  *
- * Parsing rule:
- *   * We only treat an entry as a button when it is exactly a 2-element list
- *     whose first element is also a list.
- *   * Any other shape is treated as a literal input-label iota and rendered
- *     via display(). This includes list iotas produced by intro/retro.
- *
- * Crucially, we no longer check the CONTENTS of the action-list for type.
- * Any iota Hex knows about — patterns, numbers, strings (MoreIotas), vectors,
- * entities, custom addon iotas like Ioticblocks View — is accepted and
- * forwarded untouched to the VM. Inputs are not dispatched as executable
- * iotas; their runtime text is converted to string iotas and pushed directly
- * onto the stack when a button is clicked.
+ * This parser is intentionally strict and only accepts those typed iotas.
+ * Legacy shape inference is removed.
  */
 internal object MenuReader {
 
@@ -79,8 +72,8 @@ internal object MenuReader {
 
         val entries = mutableListOf<MenuEntry>()
         var index = 0
-        for (buttonIota in buttonsIota.list) {
-            val entry = tryReadEntry(buttonIota, index)
+        for (entryIota in buttonsIota.list) {
+            val entry = tryReadEntry(entryIota, index)
             if (entry != null) {
                 Manifestation.LOGGER.info(
                     "MenuReader: entry[{}] ACCEPTED — kind={}, label='{}', {} actions",
@@ -116,87 +109,48 @@ internal object MenuReader {
         return cols.coerceIn(1, 10)
     }
 
-    /**
-     * Interpret one iota as either an input or a button.
-     *
-    * Input form:
-    *   * <any iota>
-     *
-     * Slider forms:
-    *   * [ <double min>, <double max>, <label> ]
-    *   * [ <double min>, <double max>, <double current>, <label> ]
-     *
-     * Button form:
-     *   * [ <action-list>, <label> ]
-     */
-    private fun tryReadEntry(buttonIota: Iota, index: Int): MenuEntry? {
-        if (buttonIota !is ListIota) {
-            return MenuEntry.input(buttonIota.display())
+    private fun tryReadEntry(entryIota: Iota, index: Int): MenuEntry? {
+        return when (entryIota) {
+            is UiInputIota -> {
+                MenuEntry.input(entryIota.label.display())
+            }
+
+            is UiSliderIota -> {
+                val current = if (entryIota.hasCurrent()) entryIota.current else null
+                MenuEntry.slider(entryIota.label.display(), entryIota.min, entryIota.max, current)
+            }
+
+            is UiButtonIota -> {
+                val stored = mutableListOf<StoredIota>()
+                var actionIndex = 0
+                for (action in entryIota.actions) {
+                    Manifestation.LOGGER.info(
+                        "    button[{}].action[{}]: type = {}",
+                        index, actionIndex, action::class.simpleName
+                    )
+                    stored.add(StoredIota.of(action))
+                    actionIndex++
+                }
+
+                if (stored.isEmpty()) {
+                    Manifestation.LOGGER.warn(
+                        "  button[{}]: REJECTED — action-list is empty",
+                        index
+                    )
+                    null
+                } else {
+                    MenuEntry.button(entryIota.label.display(), stored)
+                }
+            }
+
+            else -> {
+                Manifestation.LOGGER.warn(
+                    "MenuReader: entry[{}] rejected because it is not a typed ui iota: {}",
+                    index,
+                    entryIota::class.simpleName
+                )
+                null
+            }
         }
-
-        val parts = buttonIota.list.toList()
-        val slider = tryReadSlider(parts)
-        if (slider != null) {
-            return slider
-        }
-
-        if (parts.size != 2) {
-            // Not the explicit button shape: treat the whole iota as a label.
-            return MenuEntry.input(buttonIota.display())
-        }
-
-        val actionsIota = parts[0]
-        val labelIota = parts[1]
-
-        if (actionsIota !is ListIota) {
-            // Also not explicit button shape; keep as literal label.
-            return MenuEntry.input(buttonIota.display())
-        }
-
-        val stored = mutableListOf<StoredIota>()
-        var actionIndex = 0
-        for (action in actionsIota.list) {
-            Manifestation.LOGGER.info(
-                "    button[{}].action[{}]: type = {}",
-                index, actionIndex, action::class.simpleName
-            )
-            stored.add(StoredIota.of(action))
-            actionIndex++
-        }
-
-        if (stored.isEmpty()) {
-            Manifestation.LOGGER.warn(
-                "  button[{}]: REJECTED — action-list is empty",
-                index
-            )
-            return null
-        }
-
-        return MenuEntry.button(labelIota.display(), stored)
-    }
-
-    private fun tryReadSlider(parts: List<Iota>): MenuEntry? {
-        if (parts.size != 3 && parts.size != 4) {
-            return null
-        }
-
-        val min = (parts[0] as? DoubleIota)?.double ?: return null
-        val max = (parts[1] as? DoubleIota)?.double ?: return null
-        val (current, labelIota) = if (parts.size == 4) {
-            val c = (parts[2] as? DoubleIota)?.double ?: return null
-            Pair(c, parts[3])
-        } else {
-            Pair(null, parts[2])
-        }
-
-        if (min > max) {
-            return null
-        }
-
-        if (current != null && (current < min || current > max)) {
-            throw MishapInvalidIota.of(DoubleIota(current), 0, "double.between", min, max)
-        }
-
-        return MenuEntry.slider(labelIota.display(), min, max, current)
     }
 }

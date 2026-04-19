@@ -12,6 +12,10 @@ import com.bluup.manifestation.common.menu.MenuPayload
 import com.bluup.manifestation.client.menu.execution.MenuActionSender
 import com.bluup.manifestation.server.action.OpCreateGridMenu
 import com.bluup.manifestation.server.action.OpCreateListMenu
+import com.bluup.manifestation.server.action.OpUiButton
+import com.bluup.manifestation.server.action.OpUiInput
+import com.bluup.manifestation.server.action.OpUiSlider
+import com.bluup.manifestation.server.iota.ManifestationUiIotaTypes
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
@@ -42,15 +46,29 @@ object ManifestationServer : ModInitializer {
     private const val GRID_MENU_SIG = "aqwqaqwqa"
     private val GRID_MENU_DIR = HexDir.EAST
 
+    private const val UI_BUTTON_SIG = "aqwwewqaew"
+    private val UI_BUTTON_DIR = HexDir.EAST
+
+    private const val UI_INPUT_SIG = "aqwwewqwew"
+    private val UI_INPUT_DIR = HexDir.EAST
+
+    private const val UI_SLIDER_SIG = "aqwwewqwewa"
+    private val UI_SLIDER_DIR = HexDir.EAST
+
     override fun onInitialize() {
         Manifestation.LOGGER.info("Manifestation server initializing.")
 
+        registerIotaTypes()
         registerActions()
         registerC2SReceivers()
 
         Manifestation.LOGGER.info(
-            "Manifestation: registered 2 menu-creation patterns and dispatch receiver."
+            "Manifestation: registered menu constructors, menu actions, ui iota types, and dispatch receiver."
         )
+    }
+
+    private fun registerIotaTypes() {
+        ManifestationUiIotaTypes.register()
     }
 
     private fun registerActions() {
@@ -68,6 +86,31 @@ object ManifestationServer : ModInitializer {
             ActionRegistryEntry(
                 HexPattern.fromAngles(GRID_MENU_SIG, GRID_MENU_DIR),
                 OpCreateGridMenu
+            )
+        )
+
+        Registry.register(
+            HexActions.REGISTRY,
+            Manifestation.id("ui_button"),
+            ActionRegistryEntry(
+                HexPattern.fromAngles(UI_BUTTON_SIG, UI_BUTTON_DIR),
+                OpUiButton
+            )
+        )
+        Registry.register(
+            HexActions.REGISTRY,
+            Manifestation.id("ui_input"),
+            ActionRegistryEntry(
+                HexPattern.fromAngles(UI_INPUT_SIG, UI_INPUT_DIR),
+                OpUiInput
+            )
+        )
+        Registry.register(
+            HexActions.REGISTRY,
+            Manifestation.id("ui_slider"),
+            ActionRegistryEntry(
+                HexPattern.fromAngles(UI_SLIDER_SIG, UI_SLIDER_DIR),
+                OpUiSlider
             )
         )
     }
