@@ -19,14 +19,14 @@ import net.minecraft.network.chat.Component
  *   * Individual malformed button             -> skip, keep going
  *
  * Entry forms:
- *   * Input:  <label>
- *   * Input:  [<label>]
+ *   * Input:  <any iota>
  *   * Button: [<action-list>, <label>]
  *
- * A "malformed button" is a button-like entry whose shape is wrong:
- *   * Not exactly 2 elements
- *   * First element (the action-list) isn't a list
- *   * Action-list is empty (no actions = useless button)
+ * Parsing rule:
+ *   * We only treat an entry as a button when it is exactly a 2-element list
+ *     whose first element is also a list.
+ *   * Any other shape is treated as a literal input-label iota and rendered
+ *     via display(). This includes list iotas produced by intro/retro.
  *
  * Crucially, we no longer check the CONTENTS of the action-list for type.
  * Any iota Hex knows about — patterns, numbers, strings (MoreIotas), vectors,
@@ -116,9 +116,8 @@ internal object MenuReader {
     /**
      * Interpret one iota as either an input or a button.
      *
-     * Input forms:
-     *   * <label>
-     *   * [ <label> ]
+    * Input form:
+    *   * <any iota>
      *
      * Button form:
      *   * [ <action-list>, <label> ]
@@ -129,28 +128,17 @@ internal object MenuReader {
         }
 
         val parts = buttonIota.list.toList()
-        if (parts.size == 1) {
-            return MenuEntry.input(parts[0].display())
-        }
-
         if (parts.size != 2) {
-            Manifestation.LOGGER.warn(
-                "  button[{}]: REJECTED — expected 2 elements (action-list, label), got {}",
-                index, parts.size
-            )
-            return null
+            // Not the explicit button shape: treat the whole iota as a label.
+            return MenuEntry.input(buttonIota.display())
         }
 
         val actionsIota = parts[0]
         val labelIota = parts[1]
 
         if (actionsIota !is ListIota) {
-            Manifestation.LOGGER.warn(
-                "  button[{}]: REJECTED — element[0] is not a ListIota (got {}). " +
-                    "The action slot must be a list of iotas to dispatch on click.",
-                index, actionsIota::class.simpleName
-            )
-            return null
+            // Also not explicit button shape; keep as literal label.
+            return MenuEntry.input(buttonIota.display())
         }
 
         val stored = mutableListOf<StoredIota>()
