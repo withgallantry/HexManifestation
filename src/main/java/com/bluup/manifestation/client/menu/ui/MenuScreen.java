@@ -48,12 +48,20 @@ public final class MenuScreen extends Screen {
     // GRID-specific
     private static final int GRID_BUTTON_WIDTH = 120;
     private static final int INTRO_TRACE_TICKS = 12;
+    private static final int PAGE_BUTTON_WIDTH = 20;
+    private static final int PAGE_CONTROLS_HEIGHT = 20;
+    private static final int PAGE_CONTROLS_MARGIN = 6;
+    private static final int MIN_PANEL_MARGIN = 24;
 
     private final MenuPayload menu;
     private final InteractionHand hand;
     private final Map<Integer, EditBox> inputBoxes = new LinkedHashMap<>();
     private final Map<Integer, EntryBounds> entryBounds = new LinkedHashMap<>();
     private int animTick;
+    private int currentPage;
+    private int totalPages = 1;
+    private int entriesPerPage = Integer.MAX_VALUE;
+    private int effectiveColumns = 1;
 
     private static final class EntryBounds {
         final int x;
@@ -83,17 +91,31 @@ public final class MenuScreen extends Screen {
     protected void init() {
         inputBoxes.clear();
         entryBounds.clear();
-        List<MenuEntry> entries = menu.entries();
+        effectiveColumns = menu.layout() == MenuPayload.Layout.GRID
+            ? computeEffectiveGridColumns(menu.columns())
+            : 1;
 
+        int rowsPerPage = computeRowsPerPage();
+        entriesPerPage = Math.max(1, rowsPerPage * effectiveColumns);
+
+        List<MenuEntry> allEntries = menu.entries();
+        totalPages = Math.max(1, (allEntries.size() + entriesPerPage - 1) / entriesPerPage);
+        currentPage = Mth.clamp(currentPage, 0, totalPages - 1);
+
+        List<MenuEntry> pageEntries = getPageEntries(allEntries);
         switch (menu.layout()) {
-            case LIST -> layoutList(entries);
-            case GRID -> layoutGrid(entries, menu.columns());
+            case LIST -> layoutList(pageEntries);
+            case GRID -> layoutGrid(pageEntries, effectiveColumns);
+        }
+
+        if (totalPages > 1) {
+            addPageControls(pageEntries.size(), effectiveColumns);
         }
     }
 
     private void layoutList(List<MenuEntry> entries) {
-        int panelWidth = LIST_BUTTON_WIDTH + PANEL_PADDING * 2;
-        int panelHeight = panelHeightFor(entries.size(), 1);
+        int panelWidth = panelWidthForColumns(1);
+        int panelHeight = panelHeightFor(rowsFor(entries.size(), 1), totalPages > 1);
 
         int panelX = (this.width - panelWidth) / 2;
         int panelY = (this.height - panelHeight) / 2;
@@ -110,9 +132,8 @@ public final class MenuScreen extends Screen {
     private void layoutGrid(List<MenuEntry> entries, int columns) {
         int rows = (entries.size() + columns - 1) / columns;
 
-        int innerWidth = columns * GRID_BUTTON_WIDTH + (columns - 1) * BUTTON_SPACING;
-        int panelWidth = innerWidth + PANEL_PADDING * 2;
-        int panelHeight = panelHeightFor(rows, 1);
+        int panelWidth = panelWidthForColumns(columns);
+        int panelHeight = panelHeightFor(rows, totalPages > 1);
 
         int panelX = (this.width - panelWidth) / 2;
         int panelY = (this.height - panelHeight) / 2;
@@ -132,9 +153,82 @@ public final class MenuScreen extends Screen {
      * Panel height calculation shared between layouts. Takes row count, not
      * entry count, so GRID can account for wrapping.
      */
-    private int panelHeightFor(int rows, int _unused) {
+    private int panelHeightFor(int rows, boolean includePager) {
         int buttonsHeight = rows * BUTTON_HEIGHT + Math.max(0, rows - 1) * BUTTON_SPACING;
-        return PANEL_PADDING * 2 + this.font.lineHeight + TITLE_MARGIN + buttonsHeight;
+        int panelHeight = PANEL_PADDING * 2 + this.font.lineHeight + TITLE_MARGIN + buttonsHeight;
+        if (includePager) {
+            panelHeight += PAGE_CONTROLS_MARGIN + PAGE_CONTROLS_HEIGHT;
+        }
+        return panelHeight;
+    }
+
+    private int panelWidthForColumns(int columns) {
+        if (columns <= 1) {
+            return LIST_BUTTON_WIDTH + PANEL_PADDING * 2;
+        }
+        int innerWidth = columns * GRID_BUTTON_WIDTH + (columns - 1) * BUTTON_SPACING;
+        return innerWidth + PANEL_PADDING * 2;
+    }
+
+    private int rowsFor(int entries, int columns) {
+        return (entries + columns - 1) / columns;
+    }
+
+    private int computeRowsPerPage() {
+        int reserved = PANEL_PADDING * 2 + this.font.lineHeight + TITLE_MARGIN + PAGE_CONTROLS_MARGIN + PAGE_CONTROLS_HEIGHT;
+        int available = this.height - reserved - (MIN_PANEL_MARGIN * 2);
+        int rowUnit = BUTTON_HEIGHT + BUTTON_SPACING;
+        return Math.max(1, (available + BUTTON_SPACING) / rowUnit);
+    }
+
+    private int computeEffectiveGridColumns(int requestedColumns) {
+        int availableInnerWidth = this.width - (MIN_PANEL_MARGIN * 2) - (PANEL_PADDING * 2);
+        int maxColumns = Math.max(1, (availableInnerWidth + BUTTON_SPACING) / (GRID_BUTTON_WIDTH + BUTTON_SPACING));
+        return Mth.clamp(requestedColumns, 1, maxColumns);
+    }
+
+    private List<MenuEntry> getPageEntries(List<MenuEntry> allEntries) {
+        if (allEntries.isEmpty()) {
+            return List.of();
+        }
+
+        int start = currentPage * entriesPerPage;
+        if (start >= allEntries.size()) {
+            return List.of();
+        }
+
+        int end = Math.min(allEntries.size(), start + entriesPerPage);
+        return allEntries.subList(start, end);
+    }
+
+    private void addPageControls(int visibleEntryCount, int columns) {
+        int rows = rowsFor(visibleEntryCount, columns);
+        int panelWidth = panelWidthForColumns(columns);
+        int panelHeight = panelHeightFor(rows, true);
+        int panelX = (this.width - panelWidth) / 2;
+        int panelY = (this.height - panelHeight) / 2;
+
+        int navY = panelY + panelHeight - PANEL_PADDING - PAGE_CONTROLS_HEIGHT;
+        int leftX = panelX + PANEL_PADDING;
+        int rightX = panelX + panelWidth - PANEL_PADDING - PAGE_BUTTON_WIDTH;
+
+        Button prev = Button.builder(Component.literal("<"), btn -> {
+                    currentPage = Math.max(0, currentPage - 1);
+                    this.init();
+                })
+                .bounds(leftX, navY, PAGE_BUTTON_WIDTH, PAGE_CONTROLS_HEIGHT)
+                .build();
+        prev.active = currentPage > 0;
+        this.addRenderableWidget(prev);
+
+        Button next = Button.builder(Component.literal(">"), btn -> {
+                    currentPage = Math.min(totalPages - 1, currentPage + 1);
+                    this.init();
+                })
+                .bounds(rightX, navY, PAGE_BUTTON_WIDTH, PAGE_CONTROLS_HEIGHT)
+                .build();
+        next.active = currentPage < totalPages - 1;
+        this.addRenderableWidget(next);
     }
 
     private void addEntryWidget(int index, MenuEntry entry, int x, int y, int width) {
@@ -232,15 +326,12 @@ public final class MenuScreen extends Screen {
         // Recompute panel bounds for the title overlay. We can't stash these
         // from init() because the screen dimensions could theoretically change
         // mid-life (resize).
-        List<MenuEntry> entries = menu.entries();
-        int columns = menu.layout() == MenuPayload.Layout.GRID ? menu.columns() : 1;
-        int rows = (entries.size() + columns - 1) / columns;
+        List<MenuEntry> entries = getPageEntries(menu.entries());
+        int columns = menu.layout() == MenuPayload.Layout.GRID ? effectiveColumns : 1;
+        int rows = rowsFor(entries.size(), columns);
 
-        int innerWidth = columns == 1
-                ? LIST_BUTTON_WIDTH
-                : columns * GRID_BUTTON_WIDTH + (columns - 1) * BUTTON_SPACING;
-        int panelWidth = innerWidth + PANEL_PADDING * 2;
-        int panelHeight = panelHeightFor(rows, 1);
+        int panelWidth = panelWidthForColumns(columns);
+        int panelHeight = panelHeightFor(rows, totalPages > 1);
 
         int panelX = (this.width - panelWidth) / 2;
         int panelY = (this.height - panelHeight) / 2;
@@ -274,6 +365,14 @@ public final class MenuScreen extends Screen {
                 themed(0xFFEBDFFF, 0xFFDFF5FF),
                 true
         );
+
+        if (totalPages > 1) {
+            String label = "Page " + (currentPage + 1) + "/" + totalPages;
+            int navY = panelY + panelHeight - PANEL_PADDING - PAGE_CONTROLS_HEIGHT;
+            int labelWidth = this.font.width(label);
+            int labelX = panelX + (panelWidth - labelWidth) / 2;
+            graphics.drawString(this.font, label, labelX, navY + 6, themed(0xE7D7FF, 0xD9F4FF), false);
+        }
 
         if (introProgress < 1.0f) {
             int veilAlpha = (int) (88 * (1.0f - introProgress));
