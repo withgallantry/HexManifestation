@@ -18,7 +18,7 @@
   "hexcasting.category.manifestation_intents": "Intent",
   "hexcasting.category.manifestation_intents.desc": "Interactive intent primitives for manifested interfaces.",
 
-  "hexcasting.entry.manifestation_my_intent_with_media": "My intent with media",
+  "hexcasting.entry.manifestation_getting_started": "Getting Started",
   "hexcasting.entry.manifestation_menus": "Manifest",
   "hexcasting.entry.manifestation_intents": "Intent",
   "hexcasting.action.book.manifestation:create_list_menu": "Manifest List",

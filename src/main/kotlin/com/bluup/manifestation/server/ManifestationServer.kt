@@ -59,6 +59,8 @@ object ManifestationServer : ModInitializer {
     override fun onInitialize() {
         Manifestation.LOGGER.info("Manifestation server initializing.")
 
+        ManifestationConfig.load()
+
         registerIotaTypes()
         registerActions()
         registerC2SReceivers()

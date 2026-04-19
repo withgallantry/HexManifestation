@@ -2,6 +2,7 @@ package com.bluup.manifestation.server.action
 
 import com.bluup.manifestation.common.menu.MenuEntry
 import com.bluup.manifestation.common.menu.MenuPayload
+import com.bluup.manifestation.server.ManifestationConfig
 import net.minecraft.server.level.ServerPlayer
 import java.util.UUID
 
@@ -12,9 +13,6 @@ import java.util.UUID
  * CREATE_LIST_MENU / CREATE_GRID_MENU with an identical payload.
  */
 object MenuOpenLoopGuard {
-    private const val WINDOW_MS = 1400L
-    private const val TRIGGER_COUNT = 3
-
     private data class PlayerOpenState(
         val menuSignature: Int,
         val firstSeenAtMs: Long,
@@ -29,16 +27,18 @@ object MenuOpenLoopGuard {
     fun shouldMishap(player: ServerPlayer, payload: MenuPayload, nowMs: Long = System.currentTimeMillis()): Boolean {
         val key = player.uuid
         val menuSig = signatureOf(payload)
+        val windowMs = ManifestationConfig.menuOpenLoopWindowMs()
+        val triggerCount = ManifestationConfig.menuOpenLoopTriggerCount()
         val previous = recentByPlayer[key]
 
-        if (previous == null || previous.menuSignature != menuSig || nowMs - previous.firstSeenAtMs > WINDOW_MS) {
+        if (previous == null || previous.menuSignature != menuSig || nowMs - previous.firstSeenAtMs > windowMs) {
             recentByPlayer[key] = PlayerOpenState(menuSig, nowMs, 1)
             return false
         }
 
         val nextCount = previous.count + 1
         recentByPlayer[key] = previous.copy(count = nextCount)
-        return nextCount >= TRIGGER_COUNT
+        return nextCount >= triggerCount
     }
 
     private fun signatureOf(menu: MenuPayload): Int {
