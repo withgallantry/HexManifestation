@@ -1,6 +1,7 @@
 # hexdoc-manifestation
 
 Python web book docgen and hexdoc plugin for Manifestation.
+Current release version: 1.0.0.
 
 ## Setup (Windows)
 
