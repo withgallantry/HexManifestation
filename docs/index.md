@@ -2,12 +2,12 @@
 
 Welcome to the docs site for **Manifestation**, a Hex Casting companion mod for Fabric.
 
-For the hosted docs homepage, use `docs/index.html`.
+For the hosted docs homepage, use https://withgallantry.github.io/HexManifestation/.
 
 ## Live pages
 
-- [Pattern Reference](./patterns.html) - signatures, stack contracts, returns, and direct scribe links.
-- [Hex Pattern Scribe](./hex-pattern-scribe.html) - Renders and animates patterns.
+- [Pattern Reference](https://withgallantry.github.io/HexManifestation/patterns.html) - signatures, stack contracts, returns, and direct scribe links.
+- [Hex Pattern Scribe](https://withgallantry.github.io/HexManifestation/hex-pattern-scribe.html) - Renders and animates patterns.
 
 ## In this project
 

@@ -12,9 +12,9 @@ Example menu built using inputs, sections and buttons. Executes a teleport to a 
 
 ## Documentation
 
-- Start here: [Docs Home](./docs/index.html)
-- Pattern reference: [patterns.html](./docs/patterns.html)
-- Pattern scribe: [hex-pattern-scribe.html](./docs/hex-pattern-scribe.html)
+- Start here: [Docs Home](https://withgallantry.github.io/HexManifestation/)
+- Pattern reference: [patterns.html](https://withgallantry.github.io/HexManifestation/patterns.html)
+- Pattern scribe: [hex-pattern-scribe.html](https://withgallantry.github.io/HexManifestation/hex-pattern-scribe.html)
 
 ## Build
 
