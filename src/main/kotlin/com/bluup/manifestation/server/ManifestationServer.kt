@@ -26,42 +26,31 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.InteractionHand
 
 /**
- * Server-side entrypoint. Runs on both dedicated servers and the integrated
- * server inside a single-player client.
- *
- * Responsibilities:
- *   1. Register the two CREATE_*_MENU patterns in Hex's global action registry.
- *   2. Expose sendMenuTo() for operators to push a MenuPayload to a player's
- *      client via S2C packet.
- *   3. Register the button-click C2S receiver. When a player clicks a button
- *      client-side, they send us a DISPATCH_ACTION_C2S packet with the
- *      button's stored iotas; we hand them to MenuActionDispatcher to feed
- *      through the player's live casting session.
- *
- * Pattern-signature audit confirmed LIST=aqwqa and GRID=aqwqaqwqa are free.
+ * Server entrypoint for Manifestation.
+ * Registers menu actions, UI iota types, and the menu dispatch packet handler.
  */
 object ManifestationServer : ModInitializer {
 
-    private const val LIST_MENU_SIG = "aqwqa"
-    private val LIST_MENU_DIR = HexDir.EAST
+    private const val LIST_MENU_SIG = "awwaqwedwwd"
+    private val LIST_MENU_DIR = HexDir.NORTH_EAST
 
-    private const val GRID_MENU_SIG = "aqwqaqwqa"
-    private val GRID_MENU_DIR = HexDir.EAST
+    private const val GRID_MENU_SIG = "awwaeawwaqwddad"
+    private val GRID_MENU_DIR = HexDir.NORTH_EAST
 
-    private const val UI_BUTTON_SIG = "aqwwewqaew"
-    private val UI_BUTTON_DIR = HexDir.EAST
+    private const val UI_BUTTON_SIG = "awwaqwedwwdaa"
+    private val UI_BUTTON_DIR = HexDir.NORTH_EAST
 
-    private const val UI_INPUT_SIG = "aqwwewqwew"
-    private val UI_INPUT_DIR = HexDir.EAST
+    private const val UI_INPUT_SIG = "awwaqwedwwdad"
+    private val UI_INPUT_DIR = HexDir.NORTH_EAST
 
-    private const val UI_SLIDER_SIG = "aqwwewqwewa"
-    private val UI_SLIDER_DIR = HexDir.EAST
+    private const val UI_SLIDER_SIG = "awwaqwedwwdaw"
+    private val UI_SLIDER_DIR = HexDir.NORTH_EAST
 
-    private const val UI_SECTION_SIG = "aqwwewqwewaw"
-    private val UI_SECTION_DIR = HexDir.EAST
+    private const val UI_SECTION_SIG = "awwaqwedwwdawde"
+    private val UI_SECTION_DIR = HexDir.NORTH_EAST
 
-    private const val UI_DROPDOWN_SIG = "aqwwewqwewawa"
-    private val UI_DROPDOWN_DIR = HexDir.EAST
+    private const val UI_DROPDOWN_SIG = "awwaqwedwwdawaq"
+    private val UI_DROPDOWN_DIR = HexDir.NORTH_EAST
 
     override fun onInitialize() {
         Manifestation.LOGGER.info("Manifestation server initializing.")
@@ -140,12 +129,7 @@ object ManifestationServer : ModInitializer {
     }
 
     /**
-     * Wire up the button-click packet. Packet format:
-     *   - InteractionHand (enum)
-    *   - VarInt: number of input strings
-    *   - for each: UTF string
-     *   - VarInt: number of iotas
-     *   - for each: CompoundTag produced by IotaType.serialize
+     * Wire up the menu-dispatch packet receiver.
      */
     private fun registerC2SReceivers() {
         ServerPlayNetworking.registerGlobalReceiver(
@@ -170,9 +154,7 @@ object ManifestationServer : ModInitializer {
             }
             val count = buf.readVarInt()
             val tags = (0 until count).map { buf.readNbt() }
-            // Execute on the server thread — the packet arrives on the network
-            // thread, but CastingVM and setStaffcastImage must run on the main
-            // server thread.
+            // Cast execution and session writes must run on the server thread.
             server.execute {
                 val world = player.serverLevel()
                 val iotas: List<Iota> = tags.mapNotNull { tag ->

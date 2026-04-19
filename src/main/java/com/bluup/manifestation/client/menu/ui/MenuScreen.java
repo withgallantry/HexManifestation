@@ -21,20 +21,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * HUD-style modal that renders the menu described by a {@link MenuPayload}.
- *
- * <p>Layout behavior:
- * <ul>
- *   <li>{@code LIST} — one column, buttons stacked top-to-bottom. Fixed
- *       reasonable width; scales panel height to fit all entries.</li>
- *   <li>{@code GRID} — player-specified column count, buttons laid out
- *       left-to-right top-to-bottom. Panel width scales with column count.</li>
- * </ul>
- *
- * <p>Not a pause screen — world keeps rendering behind the modal, reinforcing
- * the "magical HUD" feel. Any interaction that closes the screen clears
- * {@link ActiveMenuState}; "only one menu at a time" and "single-use" both
- * fall out of that.
+ * Renders a menu payload as a non-pausing modal screen.
+ * LIST uses a single column and GRID uses a computed column count.
  */
 public final class MenuScreen extends Screen {
 
@@ -45,12 +33,13 @@ public final class MenuScreen extends Screen {
     private static final int TITLE_MARGIN = 8;
     private static final int PANEL_PADDING = 8;
 
-    // LIST-specific
+    // List layout constants.
     private static final int LIST_BUTTON_WIDTH = 200;
 
-    // GRID-specific
+    // Grid layout constants.
     private static final int GRID_BUTTON_WIDTH = 120;
     private static final int INTRO_TRACE_TICKS = 12;
+    private static final int INK_REVEAL_TICKS = 18;
     private static final int PAGE_BUTTON_WIDTH = 20;
     private static final int PAGE_CONTROLS_HEIGHT = 20;
     private static final int PAGE_CONTROLS_MARGIN = 6;
@@ -118,7 +107,7 @@ public final class MenuScreen extends Screen {
 
         @Override
         protected void applyValue() {
-            // Value is sampled when dispatching the button.
+            // Value is read when a button is dispatched.
         }
 
         double getActualValue() {
@@ -128,11 +117,11 @@ public final class MenuScreen extends Screen {
 
     private final class MenuDropdown {
         private final Component label;
-        private final List<String> options;
+        private final List<Component> options;
         private int selected;
         private final Button button;
 
-        MenuDropdown(int x, int y, int width, int height, Component label, List<String> options, int selected) {
+        MenuDropdown(int x, int y, int width, int height, Component label, List<Component> options, int selected) {
             this.label = label;
             this.options = List.copyOf(options);
             this.selected = this.options.isEmpty() ? 0 : Math.max(0, Math.min(selected, this.options.size() - 1));
@@ -146,12 +135,12 @@ public final class MenuScreen extends Screen {
         }
 
         private void updateMessage() {
-            String selectedText = options.isEmpty() ? "-" : options.get(selected);
-            this.button.setMessage(Component.literal(label.getString() + ": " + selectedText));
+            Component selectedText = options.isEmpty() ? Component.literal("-") : options.get(selected);
+            this.button.setMessage(Component.empty().append(label).append(Component.literal(": ")).append(selectedText));
         }
 
         String selectedValue() {
-            return options.isEmpty() ? "" : options.get(selected);
+            return options.isEmpty() ? "" : options.get(selected).getString();
         }
 
         Button button() {
@@ -230,7 +219,7 @@ public final class MenuScreen extends Screen {
     }
 
     /**
-     * Panel height calculation shared between layouts.
+     * Reworked so panel height calculation shared between layouts.
      */
     private int panelHeightForContent(int contentHeight, boolean includePager) {
         int panelHeight = PANEL_PADDING * 2 + this.font.lineHeight + TITLE_MARGIN + Math.max(BUTTON_HEIGHT, contentHeight);
@@ -369,8 +358,7 @@ public final class MenuScreen extends Screen {
 
         spawnClickFlare();
 
-        // Clear state BEFORE dispatching, to be safe if execution ever
-        // re-enters the screen loop mid-dispatch.
+        // Clear first in case dispatch re-enters the screen loop.
         ActiveMenuState.get().clear();
         MenuActionSender.send(entry, this.hand, collectInputValues());
         if (this.minecraft != null) {
@@ -449,7 +437,7 @@ public final class MenuScreen extends Screen {
 
     @Override
     public void onClose() {
-        // Any dismissal path — Esc, screen-replacement, whatever — clears state.
+        // Any close path clears active menu state.
         ActiveMenuState.get().clear();
         super.onClose();
     }
@@ -469,9 +457,7 @@ public final class MenuScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics);
 
-        // Recompute panel bounds for the title overlay. We can't stash these
-        // from init() because the screen dimensions could theoretically change
-        // mid-life (resize).
+        // Recompute bounds here because the screen can resize after init().
         List<MenuEntry> entries = getPageEntries(menu.entries());
         int columns = menu.layout() == MenuPayload.Layout.GRID ? effectiveColumns : 1;
         int panelWidth = panelWidthForColumns(columns);
@@ -485,14 +471,16 @@ public final class MenuScreen extends Screen {
 
         drawArcanePanel(graphics, panelX, panelY, panelWidth, panelHeight, pulse);
         drawOpeningTrace(graphics, panelX, panelY, panelWidth, panelHeight, introProgress, pulse);
+        drawLivingGlyphPerimeter(graphics, panelX, panelY, panelWidth, panelHeight, pulse);
         drawEntryBackplates(graphics, panelX, panelY, entries, columns);
         drawSectionLabels(graphics, panelX, panelY, entries, columns);
+        drawRuneLinks(graphics, panelX, panelY, entries, columns, pulse);
         drawHoverShimmer(graphics, mouseX, mouseY, pulse);
         drawSigils(graphics, panelX, panelY, panelWidth, panelHeight, pulse);
 
-        // Title centered at the top of the panel.
-        Component title = menu.title();
-        int titleWidth = this.font.width(title);
+        String titleText = revealText(menu.title().getString(), animTick, 2);
+        Component title = Component.literal(titleText);
+        int titleWidth = this.font.width(titleText);
         int titleY = panelY + PANEL_PADDING;
         int titleX = panelX + (panelWidth - titleWidth) / 2;
 
@@ -512,7 +500,7 @@ public final class MenuScreen extends Screen {
         );
 
         if (totalPages > 1) {
-            String label = "Page " + (currentPage + 1) + "/" + totalPages;
+            String label = revealText("Page " + (currentPage + 1) + "/" + totalPages, animTick, 14);
             int navY = panelY + panelHeight - PANEL_PADDING - PAGE_CONTROLS_HEIGHT;
             int labelWidth = this.font.width(label);
             int labelX = panelX + (panelWidth - labelWidth) / 2;
@@ -578,6 +566,57 @@ public final class MenuScreen extends Screen {
         graphics.fill(cx - 1, cy - 1, cx + 2, cy + 2, coreColor);
     }
 
+    private void drawLivingGlyphPerimeter(GuiGraphics graphics, int panelX, int panelY, int panelWidth, int panelHeight, float pulse) {
+        int alpha = 55 + (int) (50 * pulse);
+        int color = (alpha << 24) | themed(0xD3B6FF, 0xA8EBFF);
+
+        drawPerimeterRunes(graphics, panelX - 3, panelY - 3, panelWidth + 6, panelHeight + 6, color, true);
+        drawPerimeterRunes(graphics, panelX - 5, panelY - 5, panelWidth + 10, panelHeight + 10, color & 0x88FFFFFF, false);
+    }
+
+    private void drawPerimeterRunes(
+        GuiGraphics graphics,
+        int x,
+        int y,
+        int w,
+        int h,
+        int color,
+        boolean clockwise
+    ) {
+        int stride = 6;
+        int perimeter = (w * 2) + (h * 2);
+        int offset = clockwise ? animTick * 2 : -animTick * 2;
+
+        for (int d = 0; d < perimeter; d += stride) {
+            int moved = Math.floorMod(d + offset, perimeter);
+            int px;
+            int py;
+            if (moved < w) {
+                px = x + moved;
+                py = y;
+            } else if (moved < w + h) {
+                px = x + w;
+                py = y + (moved - w);
+            } else if (moved < (w * 2) + h) {
+                px = x + w - (moved - (w + h));
+                py = y + h;
+            } else {
+                px = x;
+                py = y + h - (moved - ((w * 2) + h));
+            }
+
+            int gate = (px * 17 + py * 13 + animTick * 9) & 7;
+            if (gate <= 2) {
+                continue;
+            }
+
+            graphics.fill(px, py, px + 1, py + 1, color);
+            if ((gate & 1) == 0) {
+                graphics.fill(px - 1, py, px, py + 1, color & 0x66FFFFFF);
+            }
+        }
+    }
+
     private void drawArcanePanel(GuiGraphics graphics, int panelX, int panelY, int panelWidth, int panelHeight, float pulse) {
         int glowAlpha = 24 + (int) (40 * pulse);
         int glow = (glowAlpha << 24) | themed(0x8C5DFF, 0x4FC7FF);
@@ -588,6 +627,7 @@ public final class MenuScreen extends Screen {
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, themed(0xD0130D1F, 0xD00D1B2B));
         graphics.fill(panelX + 3, panelY + 3, panelX + panelWidth - 3, panelY + panelHeight - 3, themed(0xCC1E1433, 0xCC142A3D));
 
+        // TODO: Should probably be a loop with an array of offsets and colors, but this is only two layers so whatever.
         int borderA = themed(0xFF9E79FF, 0xFF7DD8FF);
         int borderB = themed(0xFF5D3AA1, 0xFF316F92);
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, borderA);
@@ -670,7 +710,7 @@ public final class MenuScreen extends Screen {
             int y = placement.bounds.y;
             int w = placement.bounds.w;
 
-            String label = entry.label().getString();
+            Component label = entry.label();
             int tx = x + 8;
             int ty = y + (placement.bounds.h - this.font.lineHeight) / 2;
             graphics.drawString(this.font, label, tx, ty, themed(0xFFE8D0FF, 0xFFD9F4FF), true);
@@ -683,6 +723,51 @@ public final class MenuScreen extends Screen {
                 graphics.fill(lineStart, lineY, lineEnd, lineY + 1, lineColor);
             }
         }
+    }
+
+    private void drawRuneLinks(GuiGraphics graphics, int panelX, int panelY, List<MenuEntry> entries, int columns, float pulse) {
+        List<PositionedEntry> placements = columns == 1
+            ? computeListPlacements(entries, panelX, panelY)
+            : computeGridPlacements(entries, panelX, panelY, columns);
+
+        EntryBounds activeSection = null;
+        int lineAlpha = 40 + (int) (50 * pulse);
+        int linkColor = (lineAlpha << 24) | themed(0xCFAAFF, 0xA6E8FF);
+
+        for (PositionedEntry placement : placements) {
+            if (placement.entry.isSection()) {
+                activeSection = placement.bounds;
+                continue;
+            }
+
+            if (activeSection == null) {
+                continue;
+            }
+
+            int sx = activeSection.x + 8;
+            int sy = activeSection.y + activeSection.h - 2;
+            int ex = placement.bounds.x + 8;
+            int ey = placement.bounds.y + (placement.bounds.h / 2);
+            drawPixelLine(graphics, sx, sy, ex, ey, linkColor, 0);
+            graphics.fill(ex - 1, ey - 1, ex + 1, ey + 1, themed(0x99E0C4FF, 0x99AFE9FF));
+        }
+    }
+
+    private String revealText(String full, int tick, int delay) {
+        if (full.isEmpty()) {
+            return full;
+        }
+
+        if (tick <= delay) {
+            return "";
+        }
+
+        float p = Mth.clamp((tick - delay) / (float) INK_REVEAL_TICKS, 0.0f, 1.0f);
+        int chars = (int) Math.ceil(full.length() * p);
+        if (chars <= 0) {
+            return "";
+        }
+        return full.substring(0, Math.min(chars, full.length()));
     }
 
     private void drawHoverShimmer(GuiGraphics graphics, int mouseX, int mouseY, float pulse) {

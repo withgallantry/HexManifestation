@@ -15,7 +15,7 @@ import java.util.Objects;
  *   <li>{@link Kind#BUTTON}: dispatches its action list when clicked</li>
  *   <li>{@link Kind#INPUT}: renders a text input field with this label as hint</li>
  *   <li>{@link Kind#SLIDER}: renders a numeric slider with min/max/current</li>
- *   <li>{@link Kind#DROPDOWN}: renders a non-freeform selector over string options</li>
+ *   <li>{@link Kind#DROPDOWN}: renders a non-freeform selector over rich-text options</li>
  *   <li>{@link Kind#SECTION}: renders a non-interactive section header</li>
  * </ul>
  *
@@ -38,7 +38,7 @@ public final class MenuEntry {
     private final double sliderMax;
     private final boolean sliderHasCurrent;
     private final double sliderCurrent;
-    private final List<String> dropdownOptions;
+    private final List<Component> dropdownOptions;
     private final int dropdownSelected;
 
     public MenuEntry(
@@ -49,7 +49,7 @@ public final class MenuEntry {
             double sliderMax,
             boolean sliderHasCurrent,
             double sliderCurrent,
-            List<String> dropdownOptions,
+            List<Component> dropdownOptions,
             int dropdownSelected
     ) {
         this.kind = Objects.requireNonNull(kind, "kind");
@@ -77,8 +77,8 @@ public final class MenuEntry {
         return new MenuEntry(Kind.SLIDER, label, List.of(), min, max, hasCurrent, currentValue, List.of(), 0);
     }
 
-    public static MenuEntry dropdown(Component label, List<String> options, Integer selected) {
-        List<String> copy = List.copyOf(options);
+    public static MenuEntry dropdown(Component label, List<Component> options, Integer selected) {
+        List<Component> copy = List.copyOf(options);
         int fallback = copy.isEmpty() ? 0 : 0;
         int raw = selected == null ? fallback : selected;
         int clamped = copy.isEmpty() ? 0 : Math.max(0, Math.min(raw, copy.size() - 1));
@@ -137,7 +137,7 @@ public final class MenuEntry {
         return sliderCurrent;
     }
 
-    public List<String> dropdownOptions() {
+    public List<Component> dropdownOptions() {
         return dropdownOptions;
     }
 
@@ -168,8 +168,8 @@ public final class MenuEntry {
 
         if (kind == Kind.DROPDOWN) {
             buf.writeVarInt(dropdownOptions.size());
-            for (String option : dropdownOptions) {
-                buf.writeUtf(option);
+            for (Component option : dropdownOptions) {
+                buf.writeComponent(option);
             }
             buf.writeVarInt(dropdownSelected);
             return;
@@ -197,9 +197,9 @@ public final class MenuEntry {
 
         if (kind == Kind.DROPDOWN) {
             int n = buf.readVarInt();
-            String[] options = new String[n];
+            Component[] options = new Component[n];
             for (int i = 0; i < n; i++) {
-                options[i] = buf.readUtf();
+                options[i] = buf.readComponent();
             }
             int selected = buf.readVarInt();
             return MenuEntry.dropdown(label, List.of(options), selected);

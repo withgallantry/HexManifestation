@@ -48,8 +48,7 @@ internal object MenuReader {
             throw MishapNotEnoughArgs(2, stack.size)
         }
 
-        // Fixed contract: top is title, below is buttons-list.
-        // This corresponds to input order [buttons-list, title].
+        // Contract: stack top is title, item below is entry list.
         val titleIota = stack.removeAt(stack.lastIndex)
         val buttonsIota = stack.removeAt(stack.lastIndex)
 
@@ -68,7 +67,7 @@ internal object MenuReader {
                 "MenuReader: buttons slot is NOT a ListIota — it is {}. Mishapping.",
                 buttonsIota::class.simpleName
             )
-            // Restore original order on mishap.
+            // Restore original order before throwing.
             stack.add(buttonsIota)
             stack.add(titleIota)
             throw MishapInvalidIota.ofType(buttonsIota, 1, "list")
@@ -152,7 +151,11 @@ internal object MenuReader {
             }
 
             is UiDropdownIota -> {
-                MenuEntry.dropdown(entryIota.label.display(), entryIota.options, entryIota.selectedIndex)
+                MenuEntry.dropdown(
+                    entryIota.label.display(),
+                    entryIota.options.map { it.display() },
+                    entryIota.selectedIndex
+                )
             }
 
             else -> {

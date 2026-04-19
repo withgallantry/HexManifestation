@@ -11,7 +11,6 @@ import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.IntTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -147,9 +146,9 @@ public final class ManifestationUiIotaTypes {
             Iota label = IotaType.deserialize(labelTag, world);
 
             var optionsTag = HexUtils.downcast(ctag.get("options"), ListTag.TYPE);
-            var options = new ArrayList<String>(optionsTag.size());
+            var options = new ArrayList<Iota>(optionsTag.size());
             for (Tag optionTag : optionsTag) {
-                options.add(HexUtils.downcast(optionTag, StringTag.TYPE).getAsString());
+                options.add(IotaType.deserialize(HexUtils.downcast(optionTag, CompoundTag.TYPE), world));
             }
 
             int selected = HexUtils.downcast(ctag.get("selected"), IntTag.TYPE).getAsInt();

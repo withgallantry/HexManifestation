@@ -44,10 +44,9 @@ object OpUiDropdown : Action {
             throw MishapInvalidIota.ofType(optionsIota, 1, "non_empty_list")
         }
 
-        val options = mutableListOf<String>()
+        val options = mutableListOf<at.petrak.hexcasting.api.casting.iota.Iota>()
         for (option in optionsIota.list) {
-            // Match label behavior: any iota can provide display text.
-            options.add(option.display().string)
+            options.add(option)
         }
 
         stack.add(UiDropdownIota(label, options, 0))

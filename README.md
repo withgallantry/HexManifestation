@@ -92,6 +92,15 @@ The mixin machinery from v1 is gone. The mod is now a "normal" Hex Casting addon
 2. `./gradlew build`
 3. Jar lands in `build/libs/`.
 
+## Documentation site (GitHub Pages)
+
+This repo now includes a GitHub Pages docs site sourced from `docs/`.
+
+- Homepage source: `docs/index.md`
+- Deploy workflow: `.github/workflows/docs-pages.yml`
+
+Deployment runs on pushes to `main` and can also be run manually from the Actions tab.
+
 ## Future-proofing
 
 The payload/packet layer and the menu model are stable. Things you could add without touching them:

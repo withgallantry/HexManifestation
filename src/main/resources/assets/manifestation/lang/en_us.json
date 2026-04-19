@@ -1,0 +1,17 @@
+{
+  "hexcasting.action.manifestation:create_list_menu": "Create List Menu [entries, title]",
+  "hexcasting.action.manifestation:create_grid_menu": "Create Grid Menu [entries, title, columns]",
+  "hexcasting.action.manifestation:ui_button": "UI Button [actions, label]",
+  "hexcasting.action.manifestation:ui_input": "UI Input [label]",
+  "hexcasting.action.manifestation:ui_slider": "UI Slider [min, max, current, label]",
+  "hexcasting.action.manifestation:ui_section": "UI Section [label]",
+  "hexcasting.action.manifestation:ui_dropdown": "UI Dropdown [options, label]",
+
+  "hexcasting.action.book.manifestation:create_list_menu": "Create a ritual list menu from [entries, title]",
+  "hexcasting.action.book.manifestation:create_grid_menu": "Create a ritual grid menu from [entries, title, columns]",
+  "hexcasting.action.book.manifestation:ui_button": "Build a button entry from [actions, label]",
+  "hexcasting.action.book.manifestation:ui_input": "Build an input entry from [label]",
+  "hexcasting.action.book.manifestation:ui_slider": "Build a slider entry from [min, max, current, label]",
+  "hexcasting.action.book.manifestation:ui_section": "Build a section header entry from [label]",
+  "hexcasting.action.book.manifestation:ui_dropdown": "Build a dropdown entry from [options, label]"
+}

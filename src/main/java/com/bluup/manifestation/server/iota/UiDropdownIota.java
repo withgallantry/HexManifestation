@@ -5,36 +5,44 @@ import at.petrak.hexcasting.api.casting.iota.IotaType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.IntTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class UiDropdownIota extends Iota {
     private final Iota label;
-    private final List<String> options;
+    private final List<Iota> options;
     private final int selectedIndex;
     private final int depth;
     private final int size;
 
-    public UiDropdownIota(Iota label, List<String> options, int selectedIndex) {
+    public UiDropdownIota(Iota label, List<Iota> options, int selectedIndex) {
         super(ManifestationUiIotaTypes.UI_DROPDOWN, List.of(label, List.copyOf(options), selectedIndex));
         this.label = label;
         this.options = List.copyOf(options);
         this.selectedIndex = this.options.isEmpty()
             ? 0
             : Math.max(0, Math.min(selectedIndex, this.options.size() - 1));
-        this.depth = label.depth() + 1;
-        this.size = 1 + label.size();
+        int maxChildDepth = label.depth();
+        int totalSize = 1 + label.size();
+        for (Iota option : this.options) {
+            totalSize += option.size();
+            if (option.depth() > maxChildDepth) {
+                maxChildDepth = option.depth();
+            }
+        }
+        this.depth = maxChildDepth + 1;
+        this.size = totalSize;
     }
 
     public Iota getLabel() {
         return label;
     }
 
-    public List<String> getOptions() {
+    public List<Iota> getOptions() {
         return options;
     }
 
@@ -62,8 +70,8 @@ public final class UiDropdownIota extends Iota {
         CompoundTag out = new CompoundTag();
         out.put("label", IotaType.serialize(label));
         ListTag optionTags = new ListTag();
-        for (String option : options) {
-            optionTags.add(StringTag.valueOf(option));
+        for (Iota option : options) {
+            optionTags.add(IotaType.serialize(option));
         }
         out.put("options", optionTags);
         out.put("selected", IntTag.valueOf(selectedIndex));
@@ -72,7 +80,10 @@ public final class UiDropdownIota extends Iota {
 
     @Override
     public @Nullable Iterable<Iota> subIotas() {
-        return List.of(label);
+        ArrayList<Iota> subs = new ArrayList<>(1 + options.size());
+        subs.add(label);
+        subs.addAll(options);
+        return subs;
     }
 
     @Override
