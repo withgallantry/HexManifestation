@@ -13,7 +13,7 @@
       "type": "hexcasting:pattern",
       "op_id": "manifestation:create_list_menu",
       "anchor": "manifestation:create_list_menu",
-      "input": "list, any",
+      "input": "[intents], string | text",
       "output": "",
       "text": "hexcasting.page.manifestation.menus.create_list_menu"
     },
@@ -21,7 +21,7 @@
       "type": "hexcasting:pattern",
       "op_id": "manifestation:create_grid_menu",
       "anchor": "manifestation:create_grid_menu",
-      "input": "list, any, num",
+      "input": "[intents], string | text, num",
       "output": "",
       "text": "hexcasting.page.manifestation.menus.create_grid_menu"
     }

@@ -13,7 +13,7 @@
       "type": "hexcasting:pattern",
       "op_id": "manifestation:intent_button",
       "anchor": "manifestation:intent_button",
-      "input": "list, any",
+      "input": "[pattern], string | text",
       "output": "intent",
       "text": "hexcasting.page.manifestation.intents.intent_button"
     },
@@ -21,7 +21,7 @@
       "type": "hexcasting:pattern",
       "op_id": "manifestation:intent_input",
       "anchor": "manifestation:intent_input",
-      "input": "any",
+      "input": "string | text",
       "output": "intent",
       "text": "hexcasting.page.manifestation.intents.intent_input"
     },
@@ -29,7 +29,7 @@
       "type": "hexcasting:pattern",
       "op_id": "manifestation:intent_slider",
       "anchor": "manifestation:intent_slider",
-      "input": "num, num, num, any",
+      "input": "num, num, num, string | text",
       "output": "intent",
       "text": "hexcasting.page.manifestation.intents.intent_slider"
     },
@@ -37,7 +37,7 @@
       "type": "hexcasting:pattern",
       "op_id": "manifestation:intent_section",
       "anchor": "manifestation:intent_section",
-      "input": "any",
+      "input": "string | text",
       "output": "intent",
       "text": "hexcasting.page.manifestation.intents.intent_section"
     },
@@ -45,7 +45,7 @@
       "type": "hexcasting:pattern",
       "op_id": "manifestation:intent_dropdown",
       "anchor": "manifestation:intent_dropdown",
-      "input": "list, any",
+      "input": "list, string | text",
       "output": "intent",
       "text": "hexcasting.page.manifestation.intents.intent_dropdown"
     }
