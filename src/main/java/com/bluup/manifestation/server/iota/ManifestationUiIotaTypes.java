@@ -15,6 +15,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -193,11 +194,46 @@ public final class ManifestationUiIotaTypes {
         }
     };
 
+    public static final IotaType<PresenceIntentIota> PRESENCE_INTENT = new IotaType<>() {
+        @Nullable
+        @Override
+        public PresenceIntentIota deserialize(Tag tag, ServerLevel world) throws IllegalArgumentException {
+            var ctag = HexUtils.downcast(tag, CompoundTag.TYPE);
+            Vec3 position = at.petrak.hexcasting.api.casting.iota.Vec3Iota.deserialize(ctag.get("position")).getVec3();
+            Vec3 facing = at.petrak.hexcasting.api.casting.iota.Vec3Iota.deserialize(ctag.get("facing")).getVec3();
+            String dimension = ctag.contains("dimension")
+                ? ctag.getString("dimension")
+                : world.dimension().location().toString();
+            return new PresenceIntentIota(position, facing, dimension);
+        }
+
+        @Override
+        public Component display(Tag tag) {
+            var ctag = HexUtils.downcast(tag, CompoundTag.TYPE);
+            Vec3 position = at.petrak.hexcasting.api.casting.iota.Vec3Iota.deserialize(ctag.get("position")).getVec3();
+            Vec3 facing = at.petrak.hexcasting.api.casting.iota.Vec3Iota.deserialize(ctag.get("facing")).getVec3();
+            String dimension = ctag.contains("dimension") ? ctag.getString("dimension") : "?";
+            return Component.literal("PresenceIntent(")
+                .append(at.petrak.hexcasting.api.casting.iota.Vec3Iota.display(position))
+                .append(Component.literal(", ").withStyle(ChatFormatting.GRAY))
+                .append(at.petrak.hexcasting.api.casting.iota.Vec3Iota.display(facing))
+                .append(Component.literal(", " + dimension).withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal(")").withStyle(ChatFormatting.GRAY))
+                .withStyle(ChatFormatting.GREEN);
+        }
+
+        @Override
+        public int color() {
+            return 0xff_4fd875;
+        }
+    };
+
     public static void register() {
         Registry.register(HexIotaTypes.REGISTRY, Manifestation.id("intent_button"), UI_BUTTON);
         Registry.register(HexIotaTypes.REGISTRY, Manifestation.id("intent_input"), UI_INPUT);
         Registry.register(HexIotaTypes.REGISTRY, Manifestation.id("intent_slider"), UI_SLIDER);
         Registry.register(HexIotaTypes.REGISTRY, Manifestation.id("intent_section"), UI_SECTION);
         Registry.register(HexIotaTypes.REGISTRY, Manifestation.id("intent_dropdown"), UI_DROPDOWN);
+        Registry.register(HexIotaTypes.REGISTRY, Manifestation.id("presence_intent"), PRESENCE_INTENT);
     }
 }

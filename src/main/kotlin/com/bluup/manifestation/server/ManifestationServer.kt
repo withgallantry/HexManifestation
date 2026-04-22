@@ -13,6 +13,8 @@ import com.bluup.manifestation.client.menu.execution.MenuActionSender
 import com.bluup.manifestation.server.action.OpCreateGridMenu
 import com.bluup.manifestation.server.action.OpCreateListMenu
 import com.bluup.manifestation.server.action.OpCreateRadialMenu
+import com.bluup.manifestation.server.action.OpOpenCorridorPortal
+import com.bluup.manifestation.server.action.OpPresenceIntent
 import com.bluup.manifestation.server.action.OpUiButton
 import com.bluup.manifestation.server.action.OpUiDropdown
 import com.bluup.manifestation.server.action.OpUiInput
@@ -71,6 +73,12 @@ object ManifestationServer : ModInitializer {
 
     private const val UNLINK_INTENT_RELAY_SIG = "awwaqwedwwdawda"
     private val UNLINK_INTENT_RELAY_DIR = HexDir.NORTH_EAST
+
+    private const val OPEN_CORRIDOR_PORTAL_SIG = "awwaqwedwwdawqwe"
+    private val OPEN_CORRIDOR_PORTAL_DIR = HexDir.NORTH_EAST
+
+    private const val PRESENCE_INTENT_SIG = "awwaqwedwwdawqea"
+    private val PRESENCE_INTENT_DIR = HexDir.NORTH_EAST
 
     override fun onInitialize() {
         Manifestation.LOGGER.info("Manifestation server initializing.")
@@ -171,6 +179,22 @@ object ManifestationServer : ModInitializer {
             ActionRegistryEntry(
                 HexPattern.fromAngles(UNLINK_INTENT_RELAY_SIG, UNLINK_INTENT_RELAY_DIR),
                 OpUnlinkIntentRelay
+            )
+        )
+        Registry.register(
+            HexActions.REGISTRY,
+            Manifestation.id("open_corridor_portal"),
+            ActionRegistryEntry(
+                HexPattern.fromAngles(OPEN_CORRIDOR_PORTAL_SIG, OPEN_CORRIDOR_PORTAL_DIR),
+                OpOpenCorridorPortal
+            )
+        )
+        Registry.register(
+            HexActions.REGISTRY,
+            Manifestation.id("presence_intent"),
+            ActionRegistryEntry(
+                HexPattern.fromAngles(PRESENCE_INTENT_SIG, PRESENCE_INTENT_DIR),
+                OpPresenceIntent
             )
         )
     }

@@ -2,6 +2,7 @@ package com.bluup.manifestation.client;
 
 import com.bluup.manifestation.Manifestation;
 import com.bluup.manifestation.client.menu.ui.MenuScreen;
+import com.bluup.manifestation.client.render.CorridorPortalBlockEntityRenderer;
 import com.bluup.manifestation.client.render.IntentRelayBlockEntityRenderer;
 import com.bluup.manifestation.common.ManifestationNetworking;
 import com.bluup.manifestation.common.menu.MenuPayload;
@@ -36,6 +37,14 @@ public final class ManifestationClient implements ClientModInitializer {
         BlockRenderLayerMap.INSTANCE.putBlock(
             ManifestationBlocks.INTENT_RELAY_BLOCK,
             RenderType.cutout()
+        );
+        BlockRenderLayerMap.INSTANCE.putBlock(
+            ManifestationBlocks.CORRIDOR_PORTAL_BLOCK,
+            RenderType.translucent()
+        );
+        BlockEntityRenderers.register(
+            ManifestationBlocks.CORRIDOR_PORTAL_BLOCK_ENTITY,
+            CorridorPortalBlockEntityRenderer::new
         );
         BlockEntityRenderers.register(
             ManifestationBlocks.INTENT_RELAY_BLOCK_ENTITY,
