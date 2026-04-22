@@ -1,5 +1,6 @@
 package com.bluup.manifestation.client.render;
 
+import com.bluup.manifestation.server.ManifestationConfig;
 import com.bluup.manifestation.server.block.CorridorPortalBlock;
 import com.bluup.manifestation.server.block.CorridorPortalBlockEntity;
 import com.bluup.manifestation.server.block.ManifestationBlocks;
@@ -17,15 +18,15 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.BlockHitResult;
 
 public final class CorridorPortalBlockEntityRenderer implements BlockEntityRenderer<CorridorPortalBlockEntity> {
     private static final ResourceLocation PORTAL_SPRITE_ID =
@@ -70,13 +71,26 @@ public final class CorridorPortalBlockEntityRenderer implements BlockEntityRende
 
         TextureAtlasSprite portalSprite = resolvePortalSprite();
         VertexConsumer vc = buffer.getBuffer(RenderType.translucent());
+        PreviewGrid livePreview = null;
         float time = (blockEntity.getLevel() == null ? 0f : (blockEntity.getLevel().getGameTime() + partialTick)) * 0.035f;
         float collapseProgress = blockEntity.collapseProgress(partialTick);
         float scale = Mth.clamp(blockEntity.getRenderScale(), 0.1f, 3.0f);
 
-        drawPortalOval(poseStack, vc, packedLight, time, Z_EPSILON, envelope, scale, portalSprite);
-        drawPortalOval(poseStack, vc, packedLight, time + 0.11f, -Z_EPSILON, envelope, scale, portalSprite);
-        drawRotatingRunes(poseStack, buffer, packedLight, time, envelope, scale);
+        if (ManifestationConfig.INSTANCE.portalLiveViewEnabled()) {
+            livePreview = resolveLiveWindowPreview(blockEntity, state, scale);
+        }
+
+        if (livePreview != null) {
+            drawPreviewMosaic(poseStack, vc, packedLight, livePreview, Z_EPSILON * 0.75f, envelope);
+            drawPreviewMosaic(poseStack, vc, packedLight, livePreview, -Z_EPSILON * 0.75f, envelope);
+        } else {
+            drawPortalOval(poseStack, vc, packedLight, time, Z_EPSILON, envelope, scale, portalSprite);
+            drawPortalOval(poseStack, vc, packedLight, time + 0.11f, -Z_EPSILON, envelope, scale, portalSprite);
+        }
+
+        if (livePreview == null) {
+            drawRotatingRunes(poseStack, buffer, packedLight, time, envelope, scale);
+        }
         drawCollapseSpark(poseStack, vc, packedLight, collapseProgress);
 
         poseStack.popPose();
@@ -245,12 +259,194 @@ public final class CorridorPortalBlockEntityRenderer implements BlockEntityRende
         return Mth.sqrt(clamped);
     }
 
+    private void drawPreviewMosaic(
+        PoseStack poseStack,
+        VertexConsumer vc,
+        int light,
+        PreviewGrid preview,
+        float z,
+        float envelope
+    ) {
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f mat4 = pose.pose();
+        Matrix3f normal = pose.normal();
+
+        float portalHalfHeight = HALF_HEIGHT * envelope * preview.scale;
+        float portalHalfWidth = HALF_WIDTH * envelope * preview.scale;
+        int alpha = (int) (255 * envelope);
+
+        for (int row = 0; row < preview.rows; row++) {
+            float rowT0 = row / (float) preview.rows;
+            float rowT1 = (row + 1) / (float) preview.rows;
+
+            float y0 = Mth.lerp(rowT0, -portalHalfHeight, portalHalfHeight);
+            float y1 = Mth.lerp(rowT1, -portalHalfHeight, portalHalfHeight);
+            float halfW0 = portalHalfWidth * ellipseWidthFactor(y0 / portalHalfHeight);
+            float halfW1 = portalHalfWidth * ellipseWidthFactor(y1 / portalHalfHeight);
+
+            for (int col = 0; col < preview.cols; col++) {
+                TextureAtlasSprite sprite = preview.sprites[row][col];
+                if (sprite == null) {
+                    continue;
+                }
+
+                float colT0 = col / (float) preview.cols;
+                float colT1 = (col + 1) / (float) preview.cols;
+
+                float x00 = Mth.lerp(colT0, -halfW0, halfW0);
+                float x10 = Mth.lerp(colT1, -halfW0, halfW0);
+                float x01 = Mth.lerp(colT0, -halfW1, halfW1);
+                float x11 = Mth.lerp(colT1, -halfW1, halfW1);
+
+                float u0 = sprite.getU0();
+                float u1 = sprite.getU1();
+                float v0 = sprite.getV0();
+                float v1 = sprite.getV1();
+
+                vertex(vc, mat4, normal, x00, y0, z, u0, v0, 255, 255, 255, alpha, light, 1.0f);
+                vertex(vc, mat4, normal, x10, y0, z, u1, v0, 255, 255, 255, alpha, light, 1.0f);
+                vertex(vc, mat4, normal, x11, y1, z, u1, v1, 255, 255, 255, alpha, light, 1.0f);
+                vertex(vc, mat4, normal, x01, y1, z, u0, v1, 255, 255, 255, alpha, light, 1.0f);
+
+                vertex(vc, mat4, normal, x01, y1, z, u0, v1, 255, 255, 255, alpha, light, -1.0f);
+                vertex(vc, mat4, normal, x11, y1, z, u1, v1, 255, 255, 255, alpha, light, -1.0f);
+                vertex(vc, mat4, normal, x10, y0, z, u1, v0, 255, 255, 255, alpha, light, -1.0f);
+                vertex(vc, mat4, normal, x00, y0, z, u0, v0, 255, 255, 255, alpha, light, -1.0f);
+            }
+        }
+    }
+
+    private PreviewGrid resolveLiveWindowPreview(CorridorPortalBlockEntity portal, BlockState sourceState, float scale) {
+        Minecraft mc = Minecraft.getInstance();
+        Level level = portal.getLevel();
+        if (level == null || mc.player == null || mc.gameRenderer == null) {
+            return null;
+        }
+
+        String targetDim = portal.getRenderTargetDimensionId();
+        BlockPos targetPos = portal.getRenderTargetPos();
+        if (targetDim == null || targetPos == null) {
+            return null;
+        }
+
+        String currentDim = level.dimension().location().toString();
+        if (!currentDim.equals(targetDim) || !level.isLoaded(targetPos)) {
+            return null;
+        }
+
+        BlockState targetState = level.getBlockState(targetPos);
+        if (!targetState.hasProperty(CorridorPortalBlock.AXIS)) {
+            return null;
+        }
+
+        int cols = ManifestationConfig.INSTANCE.portalLiveViewCols();
+        int rows = ManifestationConfig.INSTANCE.portalLiveViewRows();
+        float maxDist = ManifestationConfig.INSTANCE.portalLiveViewDistanceBlocks();
+
+        Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
+        Vec3 sourceCenter = Vec3.atCenterOf(portal.getBlockPos());
+        Vec3 targetCenter = Vec3.atCenterOf(targetPos);
+
+        Vec3 sourceBaseNormal = normalFromAxis(sourceState.getValue(CorridorPortalBlock.AXIS));
+        double sideSign = cameraPos.subtract(sourceCenter).dot(sourceBaseNormal) >= 0.0 ? 1.0 : -1.0;
+
+        Vec3 sourceNormal = sourceBaseNormal.scale(sideSign);
+        Vec3 sourceRight = rightFromAxis(sourceState.getValue(CorridorPortalBlock.AXIS), sideSign);
+
+        Vec3 targetBaseNormal = normalFromAxis(targetState.getValue(CorridorPortalBlock.AXIS));
+        Vec3 targetNormal = targetBaseNormal.scale(sideSign);
+        Vec3 targetRight = rightFromAxis(targetState.getValue(CorridorPortalBlock.AXIS), sideSign);
+        Vec3 up = new Vec3(0.0, 1.0, 0.0);
+
+        Vec3 delta = cameraPos.subtract(sourceCenter);
+        double localR = delta.dot(sourceRight);
+        double localU = delta.y;
+        double localN = delta.dot(sourceNormal);
+
+        Vec3 virtualCamera = targetCenter
+            .add(targetRight.scale(localR))
+            .add(up.scale(localU))
+            .add(targetNormal.scale(-localN));
+
+        TextureAtlasSprite[][] sprites = new TextureAtlasSprite[rows][cols];
+        float halfW = HALF_WIDTH * scale;
+        float halfH = HALF_HEIGHT * scale;
+
+        for (int row = 0; row < rows; row++) {
+            float v = ((row + 0.5f) / rows) * 2.0f - 1.0f;
+            for (int col = 0; col < cols; col++) {
+                float u = ((col + 0.5f) / cols) * 2.0f - 1.0f;
+
+                Vec3 planePoint = targetCenter
+                    .add(targetRight.scale(u * halfW))
+                    .add(up.scale(v * halfH));
+
+                Vec3 dir = planePoint.subtract(virtualCamera);
+                if (dir.lengthSqr() < 1.0e-8) {
+                    continue;
+                }
+
+                Vec3 rayDir = dir.normalize();
+                Vec3 rayEnd = virtualCamera.add(rayDir.scale(maxDist));
+                BlockHitResult hit = level.clip(new ClipContext(
+                    virtualCamera,
+                    rayEnd,
+                    ClipContext.Block.COLLIDER,
+                    ClipContext.Fluid.NONE,
+                    mc.player
+                ));
+
+                if (hit.getType() != HitResult.Type.BLOCK) {
+                    continue;
+                }
+
+                BlockPos hitPos = hit.getBlockPos();
+                BlockState hitState = level.getBlockState(hitPos);
+                if (hitState.getBlock() == ManifestationBlocks.CORRIDOR_PORTAL_BLOCK || hitState.isAir()) {
+                    continue;
+                }
+
+                sprites[row][col] = mc.getBlockRenderer()
+                    .getBlockModelShaper()
+                    .getBlockModel(hitState)
+                    .getParticleIcon();
+            }
+        }
+
+        return new PreviewGrid(sprites, rows, cols, scale);
+    }
+
+    private static Vec3 normalFromAxis(Direction.Axis axis) {
+        return axis == Direction.Axis.X ? new Vec3(1.0, 0.0, 0.0) : new Vec3(0.0, 0.0, 1.0);
+    }
+
+    private static Vec3 rightFromAxis(Direction.Axis axis, double sideSign) {
+        if (axis == Direction.Axis.X) {
+            return new Vec3(0.0, 0.0, sideSign >= 0.0 ? -1.0 : 1.0);
+        }
+        return new Vec3(sideSign >= 0.0 ? 1.0 : -1.0, 0.0, 0.0);
+    }
+
     private TextureAtlasSprite resolvePortalSprite() {
         TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(PORTAL_SPRITE_ID);
         if (sprite == null) {
             return Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getBlockModel(net.minecraft.world.level.block.Blocks.NETHER_PORTAL.defaultBlockState()).getParticleIcon();
         }
         return sprite;
+    }
+
+    private static final class PreviewGrid {
+        private final TextureAtlasSprite[][] sprites;
+        private final int rows;
+        private final int cols;
+        private final float scale;
+
+        private PreviewGrid(TextureAtlasSprite[][] sprites, int rows, int cols, float scale) {
+            this.sprites = sprites;
+            this.rows = rows;
+            this.cols = cols;
+            this.scale = scale;
+        }
     }
 
     private static void vertex(

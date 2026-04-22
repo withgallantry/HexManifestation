@@ -6,6 +6,7 @@ import com.bluup.manifestation.client.render.CorridorPortalBlockEntityRenderer;
 import com.bluup.manifestation.client.render.IntentRelayBlockEntityRenderer;
 import com.bluup.manifestation.common.ManifestationNetworking;
 import com.bluup.manifestation.common.menu.MenuPayload;
+import com.bluup.manifestation.server.ManifestationConfig;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -33,6 +34,7 @@ public final class ManifestationClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         Manifestation.LOGGER.info("Manifestation client initializing.");
+        ManifestationConfig.INSTANCE.load();
 
         BlockRenderLayerMap.INSTANCE.putBlock(
             ManifestationBlocks.INTENT_RELAY_BLOCK,

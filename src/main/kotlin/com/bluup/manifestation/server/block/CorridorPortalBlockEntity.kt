@@ -200,10 +200,11 @@ class CorridorPortalBlockEntity(
         val targetNormal = normalFromAxis(targetState.getValue(CorridorPortalBlock.AXIS))
         val targetCenter = Vec3.atCenterOf(target)
         val relativeY = (entity.y - worldPosition.y).coerceIn(0.05, 1.75)
+        val scaledExitOffset = EXIT_OFFSET * targetPortal.getRenderScale().coerceIn(0.1f, 3.0f)
         val exitFacing = targetNormal.scale(side)
         val exitYaw = ((Mth.atan2(exitFacing.z, exitFacing.x) * (180.0 / Math.PI)) - 90.0).toFloat()
         val exitPos = targetCenter
-            .add(targetNormal.scale(side * EXIT_OFFSET))
+            .add(targetNormal.scale(side * scaledExitOffset.toDouble()))
             .add(0.0, relativeY - 0.5, 0.0)
 
         val newCooldown = now + TELEPORT_COOLDOWN_TICKS

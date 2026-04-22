@@ -16,6 +16,10 @@ object ManifestationConfig {
     private const val DEFAULT_INTENT_RELAY_MAX_RANGE_BLOCKS = -1
     private const val DEFAULT_INTENT_RELAY_COOLDOWN_TICKS = 4
     private const val DEFAULT_INTENT_RELAY_STEP_TRIGGER_ENABLED = true
+    private const val DEFAULT_PORTAL_LIVE_VIEW_ENABLED = true
+    private const val DEFAULT_PORTAL_LIVE_VIEW_COLS = 48
+    private const val DEFAULT_PORTAL_LIVE_VIEW_ROWS = 72
+    private const val DEFAULT_PORTAL_LIVE_VIEW_DISTANCE_BLOCKS = 48
 
     private const val MIN_MENU_LOOP_WINDOW_MS = 200L
     private const val MAX_MENU_LOOP_WINDOW_MS = 10_000L
@@ -25,6 +29,12 @@ object ManifestationConfig {
     private const val MAX_INTENT_RELAY_MAX_RANGE_BLOCKS = 32
     private const val MIN_INTENT_RELAY_COOLDOWN_TICKS = 0
     private const val MAX_INTENT_RELAY_COOLDOWN_TICKS = 40
+    private const val MIN_PORTAL_LIVE_VIEW_COLS = 12
+    private const val MAX_PORTAL_LIVE_VIEW_COLS = 96
+    private const val MIN_PORTAL_LIVE_VIEW_ROWS = 18
+    private const val MAX_PORTAL_LIVE_VIEW_ROWS = 128
+    private const val MIN_PORTAL_LIVE_VIEW_DISTANCE_BLOCKS = 8
+    private const val MAX_PORTAL_LIVE_VIEW_DISTANCE_BLOCKS = 128
 
     private val gson = GsonBuilder().setPrettyPrinting().create()
     private val configPath = FabricLoader.getInstance().configDir.resolve("manifestation.json")
@@ -44,6 +54,18 @@ object ManifestationConfig {
     @Volatile
     private var intentRelayStepTriggerEnabled: Boolean = DEFAULT_INTENT_RELAY_STEP_TRIGGER_ENABLED
 
+    @Volatile
+    private var portalLiveViewEnabled: Boolean = DEFAULT_PORTAL_LIVE_VIEW_ENABLED
+
+    @Volatile
+    private var portalLiveViewCols: Int = DEFAULT_PORTAL_LIVE_VIEW_COLS
+
+    @Volatile
+    private var portalLiveViewRows: Int = DEFAULT_PORTAL_LIVE_VIEW_ROWS
+
+    @Volatile
+    private var portalLiveViewDistanceBlocks: Int = DEFAULT_PORTAL_LIVE_VIEW_DISTANCE_BLOCKS
+
     fun load() {
         val loaded = readOrNull()
         val effective = sanitize(loaded ?: RawConfig())
@@ -53,6 +75,10 @@ object ManifestationConfig {
         intentRelayMaxRangeBlocks = effective.intentRelayMaxRangeBlocks
         intentRelayCooldownTicks = effective.intentRelayCooldownTicks
         intentRelayStepTriggerEnabled = effective.intentRelayStepTriggerEnabled
+        portalLiveViewEnabled = effective.portalLiveViewEnabled
+        portalLiveViewCols = effective.portalLiveViewCols
+        portalLiveViewRows = effective.portalLiveViewRows
+        portalLiveViewDistanceBlocks = effective.portalLiveViewDistanceBlocks
 
         if (loaded == null || loaded != effective) {
             write(effective)
@@ -60,12 +86,17 @@ object ManifestationConfig {
 
         Manifestation.LOGGER.info(
             "Manifestation config loaded: menuOpenLoopWindowMs={}, menuOpenLoopTriggerCount={}, " +
-                "intentRelayMaxRangeBlocks={}, intentRelayCooldownTicks={}, intentRelayStepTriggerEnabled={}",
+                "intentRelayMaxRangeBlocks={}, intentRelayCooldownTicks={}, intentRelayStepTriggerEnabled={}, " +
+                "portalLiveViewEnabled={}, portalLiveViewCols={}, portalLiveViewRows={}, portalLiveViewDistanceBlocks={}",
             menuLoopWindowMs,
             menuLoopTriggerCount,
             intentRelayMaxRangeBlocks,
             intentRelayCooldownTicks,
-            intentRelayStepTriggerEnabled
+            intentRelayStepTriggerEnabled,
+            portalLiveViewEnabled,
+            portalLiveViewCols,
+            portalLiveViewRows,
+            portalLiveViewDistanceBlocks
         )
     }
 
@@ -78,6 +109,14 @@ object ManifestationConfig {
     fun intentRelayCooldownTicks(): Int = intentRelayCooldownTicks
 
     fun intentRelayStepTriggerEnabled(): Boolean = intentRelayStepTriggerEnabled
+
+    fun portalLiveViewEnabled(): Boolean = portalLiveViewEnabled
+
+    fun portalLiveViewCols(): Int = portalLiveViewCols
+
+    fun portalLiveViewRows(): Int = portalLiveViewRows
+
+    fun portalLiveViewDistanceBlocks(): Int = portalLiveViewDistanceBlocks
 
     private fun readOrNull(): RawConfig? {
         if (!Files.exists(configPath)) {
@@ -129,7 +168,20 @@ object ManifestationConfig {
                 MIN_INTENT_RELAY_COOLDOWN_TICKS,
                 MAX_INTENT_RELAY_COOLDOWN_TICKS
             ),
-            intentRelayStepTriggerEnabled = raw.intentRelayStepTriggerEnabled
+            intentRelayStepTriggerEnabled = raw.intentRelayStepTriggerEnabled,
+            portalLiveViewEnabled = raw.portalLiveViewEnabled,
+            portalLiveViewCols = raw.portalLiveViewCols.coerceIn(
+                MIN_PORTAL_LIVE_VIEW_COLS,
+                MAX_PORTAL_LIVE_VIEW_COLS
+            ),
+            portalLiveViewRows = raw.portalLiveViewRows.coerceIn(
+                MIN_PORTAL_LIVE_VIEW_ROWS,
+                MAX_PORTAL_LIVE_VIEW_ROWS
+            ),
+            portalLiveViewDistanceBlocks = raw.portalLiveViewDistanceBlocks.coerceIn(
+                MIN_PORTAL_LIVE_VIEW_DISTANCE_BLOCKS,
+                MAX_PORTAL_LIVE_VIEW_DISTANCE_BLOCKS
+            )
         )
     }
 
@@ -138,6 +190,10 @@ object ManifestationConfig {
         var menuOpenLoopTriggerCount: Int = DEFAULT_MENU_LOOP_TRIGGER_COUNT,
         var intentRelayMaxRangeBlocks: Int = DEFAULT_INTENT_RELAY_MAX_RANGE_BLOCKS,
         var intentRelayCooldownTicks: Int = DEFAULT_INTENT_RELAY_COOLDOWN_TICKS,
-        var intentRelayStepTriggerEnabled: Boolean = DEFAULT_INTENT_RELAY_STEP_TRIGGER_ENABLED
+        var intentRelayStepTriggerEnabled: Boolean = DEFAULT_INTENT_RELAY_STEP_TRIGGER_ENABLED,
+        var portalLiveViewEnabled: Boolean = DEFAULT_PORTAL_LIVE_VIEW_ENABLED,
+        var portalLiveViewCols: Int = DEFAULT_PORTAL_LIVE_VIEW_COLS,
+        var portalLiveViewRows: Int = DEFAULT_PORTAL_LIVE_VIEW_ROWS,
+        var portalLiveViewDistanceBlocks: Int = DEFAULT_PORTAL_LIVE_VIEW_DISTANCE_BLOCKS
     )
 }
