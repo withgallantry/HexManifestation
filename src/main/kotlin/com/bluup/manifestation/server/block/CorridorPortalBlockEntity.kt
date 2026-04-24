@@ -36,6 +36,7 @@ class CorridorPortalBlockEntity(
     private var openedAtGameTime: Long = 0L
     private var collapseStartedAtGameTime: Long = -1L
     private var renderScale: Float = 1.0f
+    private var renderShape: Int = 0
     private var previewPositive: List<String>? = null
     private var previewNegative: List<String>? = null
 
@@ -47,7 +48,8 @@ class CorridorPortalBlockEntity(
         targetDimension: String,
         owner: UUID?,
         mediaBudget: Long,
-        scale: Float
+        scale: Float,
+        shape: Int
     ) {
         targetDimensionId = targetDimension
         targetPos = target.immutable()
@@ -57,6 +59,7 @@ class CorridorPortalBlockEntity(
         openedAtGameTime = level.gameTime
         collapseStartedAtGameTime = -1L
         renderScale = scale.coerceIn(0.1f, 3.0f)
+        renderShape = shape.coerceIn(0, 1)
 
         val targetKey = ResourceKey.create(Registries.DIMENSION, ResourceLocation(targetDimension))
         val targetLevel = level.server.getLevel(targetKey)
@@ -122,6 +125,8 @@ class CorridorPortalBlockEntity(
     fun getRenderPreviewNegative(): List<String>? = previewNegative
 
     fun getRenderScale(): Float = renderScale
+
+    fun getRenderShape(): Int = renderShape
 
     fun serverTick(level: ServerLevel) {
         if (!isSustainDriver(level)) {
@@ -242,6 +247,7 @@ class CorridorPortalBlockEntity(
             -1L
         }
         renderScale = if (tag.contains(TAG_RENDER_SCALE)) tag.getFloat(TAG_RENDER_SCALE) else 1.0f
+        renderShape = if (tag.contains(TAG_RENDER_SHAPE)) tag.getInt(TAG_RENDER_SHAPE) else 0
         previewPositive = if (tag.contains(TAG_PREVIEW_POSITIVE, Tag.TAG_LIST.toInt())) {
             readStringList(tag.getList(TAG_PREVIEW_POSITIVE, Tag.TAG_STRING.toInt()))
         } else {
@@ -276,6 +282,7 @@ class CorridorPortalBlockEntity(
             tag.putLong(TAG_COLLAPSE_STARTED_AT_TIME, collapseStartedAtGameTime)
         }
         tag.putFloat(TAG_RENDER_SCALE, renderScale)
+        tag.putInt(TAG_RENDER_SHAPE, renderShape)
         val posPreview = previewPositive
         if (!posPreview.isNullOrEmpty()) {
             tag.put(TAG_PREVIEW_POSITIVE, writeStringList(posPreview))
@@ -299,6 +306,7 @@ class CorridorPortalBlockEntity(
         private const val TAG_OPENED_AT_TIME = "OpenedAtGameTime"
         private const val TAG_COLLAPSE_STARTED_AT_TIME = "CollapseStartedAtGameTime"
         private const val TAG_RENDER_SCALE = "RenderScale"
+        private const val TAG_RENDER_SHAPE = "RenderShape"
         private const val TAG_PREVIEW_POSITIVE = "PreviewPositive"
         private const val TAG_PREVIEW_NEGATIVE = "PreviewNegative"
 

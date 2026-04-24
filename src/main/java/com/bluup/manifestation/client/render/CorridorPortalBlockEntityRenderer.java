@@ -1,40 +1,22 @@
 package com.bluup.manifestation.client.render;
 
-import com.bluup.manifestation.server.ManifestationConfig;
 import com.bluup.manifestation.server.block.CorridorPortalBlock;
 import com.bluup.manifestation.server.block.CorridorPortalBlockEntity;
-import com.bluup.manifestation.server.block.ManifestationBlocks;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.BlockHitResult;
 
 public final class CorridorPortalBlockEntityRenderer implements BlockEntityRenderer<CorridorPortalBlockEntity> {
-    private static final ResourceLocation PORTAL_SPRITE_ID =
-        new ResourceLocation("minecraft", "block/end_portal");
-
-    private static final String[] RUNES = {"ᚠ", "ᚢ", "ᚦ", "ᚨ", "ᚱ", "ᚲ", "ᚹ", "ᛇ", "ᛉ", "ᛟ"};
-
     private static final int STRIPS = 40;
+    private static final int OUTLINE_SEGMENTS = 64;
     private static final float HALF_HEIGHT = 0.78f;
     private static final float HALF_WIDTH = 0.50f;
     private static final float Z_EPSILON = 0.0025f;
@@ -69,62 +51,47 @@ public final class CorridorPortalBlockEntityRenderer implements BlockEntityRende
             return;
         }
 
-        TextureAtlasSprite portalSprite = resolvePortalSprite();
-        VertexConsumer vc = buffer.getBuffer(RenderType.translucent());
-        PreviewGrid livePreview = null;
-        float time = (blockEntity.getLevel() == null ? 0f : (blockEntity.getLevel().getGameTime() + partialTick)) * 0.035f;
+        VertexConsumer portalVc = buffer.getBuffer(RenderType.endPortal());
+        VertexConsumer fxVc = buffer.getBuffer(RenderType.translucent());
+        VertexConsumer energyVc = buffer.getBuffer(RenderType.lightning());
+        float time = (blockEntity.getLevel() == null ? 0f : (blockEntity.getLevel().getGameTime() + partialTick)) * 0.042f;
         float collapseProgress = blockEntity.collapseProgress(partialTick);
         float scale = Mth.clamp(blockEntity.getRenderScale(), 0.1f, 3.0f);
+        int shape = blockEntity.getRenderShape();
 
-        if (ManifestationConfig.INSTANCE.portalLiveViewEnabled()) {
-            livePreview = resolveLiveWindowPreview(blockEntity, state, scale);
-        }
-
-        if (livePreview != null) {
-            drawPreviewMosaic(poseStack, vc, packedLight, livePreview, Z_EPSILON * 0.75f, envelope);
-            drawPreviewMosaic(poseStack, vc, packedLight, livePreview, -Z_EPSILON * 0.75f, envelope);
+        // End portal parallax core with a jagged tear silhouette.
+        if (shape == 1) {
+            drawPortalSquare(poseStack, portalVc, Z_EPSILON, envelope, scale);
+            drawPortalSquare(poseStack, portalVc, -Z_EPSILON, envelope, scale);
         } else {
-            drawPortalOval(poseStack, vc, packedLight, time, Z_EPSILON, envelope, scale, portalSprite);
-            drawPortalOval(poseStack, vc, packedLight, time + 0.11f, -Z_EPSILON, envelope, scale, portalSprite);
+            drawPortalTear(poseStack, portalVc, Z_EPSILON, envelope, scale, time);
+            drawPortalTear(poseStack, portalVc, -Z_EPSILON, envelope, scale, time + 1.7f);
         }
-
-        if (livePreview == null) {
-            drawRotatingRunes(poseStack, buffer, packedLight, time, envelope, scale);
-        }
-        drawCollapseSpark(poseStack, vc, packedLight, collapseProgress);
+        drawEdgeVeil(poseStack, fxVc, packedLight, envelope, scale, time, shape);
+        drawInflowTrails(poseStack, energyVc, packedLight, envelope, scale, time);
+        drawPurpleGlow(poseStack, energyVc, packedLight, envelope, scale, time, shape);
+        drawSquareCornerAccents(poseStack, energyVc, packedLight, envelope, scale, time, shape);
+        drawCollapseSpark(poseStack, energyVc, packedLight, collapseProgress);
 
         poseStack.popPose();
     }
 
-    private void drawPortalOval(
+    private void drawPortalTear(
         PoseStack poseStack,
         VertexConsumer vc,
-        int light,
-        float time,
         float z,
         float envelope,
         float scale,
-        TextureAtlasSprite sprite
+        float time
     ) {
         PoseStack.Pose pose = poseStack.last();
         Matrix4f mat4 = pose.pose();
-        Matrix3f normal = pose.normal();
 
         float portalHalfHeight = HALF_HEIGHT * envelope * scale;
         float portalHalfWidth = HALF_WIDTH * envelope * scale;
-
-        float spriteU0 = sprite.getU0();
-        float spriteU1 = sprite.getU1();
-        float spriteV0 = sprite.getV0();
-        float spriteV1 = sprite.getV1();
-        float uInset = (spriteU1 - spriteU0) * 0.03f;
-        float vInset = (spriteV1 - spriteV0) * 0.03f;
-        float uLeft = spriteU0 + uInset;
-        float uRight = spriteU1 - uInset;
-        float uMid = (uLeft + uRight) * 0.5f;
-        float vBottomBase = spriteV0 + vInset;
-        float vTopBase = spriteV1 - vInset;
-        float shimmer = (Mth.sin(time * 2.1f) * 0.5f + 0.5f) * (vTopBase - vBottomBase) * 0.10f;
+        if (portalHalfHeight <= 0.0001f || portalHalfWidth <= 0.0001f) {
+            return;
+        }
 
         for (int i = 0; i < STRIPS; i++) {
             float v0 = i / (float) STRIPS;
@@ -133,99 +100,237 @@ public final class CorridorPortalBlockEntityRenderer implements BlockEntityRende
             float y0 = Mth.lerp(v0, -portalHalfHeight, portalHalfHeight);
             float y1 = Mth.lerp(v1, -portalHalfHeight, portalHalfHeight);
 
-            float halfW0 = portalHalfWidth * ellipseWidthFactor(y0 / portalHalfHeight);
-            float halfW1 = portalHalfWidth * ellipseWidthFactor(y1 / portalHalfHeight);
+            float n0 = y0 / portalHalfHeight;
+            float n1 = y1 / portalHalfHeight;
 
-            float texV0 = Mth.lerp(v0, vBottomBase, vTopBase) + shimmer;
-            float texV1 = Mth.lerp(v1, vBottomBase, vTopBase) + shimmer;
+            float wobble0 = tearWobbleX(n0, envelope, scale, time);
+            float wobble1 = tearWobbleX(n1, envelope, scale, time);
 
-            float edgeRadiusTop = Mth.abs(y0 / portalHalfHeight);
-            float edgeRadiusBottom = Mth.abs(y1 / portalHalfHeight);
-            float edgeRadius = Math.max(edgeRadiusTop, edgeRadiusBottom);
-            // Keep alpha fully solid for most of the oval and fade only near the outer rim.
-            float edgeMask = 1.0f - Mth.clamp((edgeRadius - 0.90f) / 0.10f, 0.0f, 1.0f);
+            float left0 = tearLeftX(n0, portalHalfWidth, envelope, scale, time) + wobble0;
+            float right0 = tearRightX(n0, portalHalfWidth, envelope, scale, time) + wobble0;
+            float left1 = tearLeftX(n1, portalHalfWidth, envelope, scale, time) + wobble1;
+            float right1 = tearRightX(n1, portalHalfWidth, envelope, scale, time) + wobble1;
 
-            int edgeAlpha = (int) (18 * envelope * edgeMask);
-            int coreAlpha = (int) (172 * envelope * edgeMask);
+            portalVertex(vc, mat4, left0, y0, z);
+            portalVertex(vc, mat4, right0, y0, z);
+            portalVertex(vc, mat4, right1, y1, z);
+            portalVertex(vc, mat4, left1, y1, z);
 
-            // Left half strip with fade from edge to center.
-            vertex(vc, mat4, normal, -halfW0, y0, z, uLeft, texV0, 80, 92, 128, edgeAlpha, light, 1.0f);
-            vertex(vc, mat4, normal, 0.0f, y0, z, uMid, texV0, 188, 214, 255, coreAlpha, light, 1.0f);
-            vertex(vc, mat4, normal, 0.0f, y1, z, uMid, texV1, 188, 214, 255, coreAlpha, light, 1.0f);
-            vertex(vc, mat4, normal, -halfW1, y1, z, uLeft, texV1, 80, 92, 128, edgeAlpha, light, 1.0f);
-
-            vertex(vc, mat4, normal, -halfW1, y1, z, uLeft, texV1, 80, 92, 128, edgeAlpha, light, -1.0f);
-            vertex(vc, mat4, normal, 0.0f, y1, z, uMid, texV1, 188, 214, 255, coreAlpha, light, -1.0f);
-            vertex(vc, mat4, normal, 0.0f, y0, z, uMid, texV0, 188, 214, 255, coreAlpha, light, -1.0f);
-            vertex(vc, mat4, normal, -halfW0, y0, z, uLeft, texV0, 80, 92, 128, edgeAlpha, light, -1.0f);
-
-            // Right half strip with fade from center to edge.
-            vertex(vc, mat4, normal, 0.0f, y0, z, uMid, texV0, 188, 214, 255, coreAlpha, light, 1.0f);
-            vertex(vc, mat4, normal, halfW0, y0, z, uRight, texV0, 80, 92, 128, edgeAlpha, light, 1.0f);
-            vertex(vc, mat4, normal, halfW1, y1, z, uRight, texV1, 80, 92, 128, edgeAlpha, light, 1.0f);
-            vertex(vc, mat4, normal, 0.0f, y1, z, uMid, texV1, 188, 214, 255, coreAlpha, light, 1.0f);
-
-            vertex(vc, mat4, normal, 0.0f, y1, z, uMid, texV1, 188, 214, 255, coreAlpha, light, -1.0f);
-            vertex(vc, mat4, normal, halfW1, y1, z, uRight, texV1, 80, 92, 128, edgeAlpha, light, -1.0f);
-            vertex(vc, mat4, normal, halfW0, y0, z, uRight, texV0, 80, 92, 128, edgeAlpha, light, -1.0f);
-            vertex(vc, mat4, normal, 0.0f, y0, z, uMid, texV0, 188, 214, 255, coreAlpha, light, -1.0f);
+            portalVertex(vc, mat4, left1, y1, z);
+            portalVertex(vc, mat4, right1, y1, z);
+            portalVertex(vc, mat4, right0, y0, z);
+            portalVertex(vc, mat4, left0, y0, z);
         }
     }
 
-    private void drawRotatingRunes(PoseStack poseStack, MultiBufferSource buffer, int light, float time, float envelope, float scale) {
-        // Draw the rune ring on both faces so it is readable from either side.
-        drawRuneRing(poseStack, buffer, light, time, envelope, scale, Z_EPSILON + 0.0005f, false);
-        drawRuneRing(poseStack, buffer, light, time, envelope, scale, -Z_EPSILON - 0.0005f, true);
-    }
-
-    private void drawRuneRing(
+    private void drawPurpleGlow(
         PoseStack poseStack,
-        MultiBufferSource buffer,
+        VertexConsumer vc,
         int light,
-        float time,
         float envelope,
         float scale,
-        float z,
-        boolean flipFacing
+        float time,
+        int shape
     ) {
-        Minecraft mc = Minecraft.getInstance();
-        Font font = mc.font;
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f mat4 = pose.pose();
+        Matrix3f normal = pose.normal();
 
-        int runeCount = 16;
-        float ringX = (HALF_WIDTH + 0.06f) * envelope * scale;
-        float ringY = (HALF_HEIGHT + 0.08f) * envelope * scale;
-
-        for (int i = 0; i < runeCount; i++) {
-            float a = time + (Mth.TWO_PI * i / runeCount);
-            float x = Mth.cos(a) * ringX;
-            float y = Mth.sin(a) * ringY;
-
-            String glyph = RUNES[i % RUNES.length];
-            int alpha = Mth.clamp((int) (220 * envelope), 0, 255);
-            int color = (alpha << 24) | 0xD8B2FF;
-
-            poseStack.pushPose();
-            poseStack.translate(x, y, z);
-            if (flipFacing) {
-                poseStack.mulPose(Axis.YP.rotationDegrees(180.0f));
-            }
-            poseStack.scale(0.012f, -0.012f, 0.012f);
-            float w = font.width(glyph) / 2.0f;
-            Matrix4f mat4 = poseStack.last().pose();
-            font.drawInBatch(
-                glyph,
-                -w,
-                0.0f,
-                color,
-                false,
-                mat4,
-                buffer,
-                Font.DisplayMode.SEE_THROUGH,
-                0,
-                light
-            );
-            poseStack.popPose();
+        float halfH = HALF_HEIGHT * envelope * scale;
+        float halfW = HALF_WIDTH * envelope * scale;
+        if (halfH <= 0.0001f || halfW <= 0.0001f) {
+            return;
         }
+
+        float zFront = Z_EPSILON + 0.0014f;
+        float zBack = -Z_EPSILON - 0.0014f;
+        float glowPulse = 0.74f + (0.18f * Mth.sin(time * 2.1f)) + (0.08f * Mth.sin(time * 6.2f));
+        int alphaOuter = Mth.clamp((int) (112f * envelope * glowPulse), 0, 255);
+        int alphaInner = Mth.clamp((int) (188f * envelope * glowPulse), 0, 255);
+
+        for (int side = 0; side < 2; side++) {
+            float z = side == 0 ? zFront : zBack;
+            float nz = side == 0 ? 1.0f : -1.0f;
+
+            for (int i = 0; i < OUTLINE_SEGMENTS; i++) {
+                float a0 = Mth.TWO_PI * i / OUTLINE_SEGMENTS;
+                float a1 = Mth.TWO_PI * (i + 1) / OUTLINE_SEGMENTS;
+
+                PortalPoint inner0 = portalPoint(shape, a0, halfW, halfH, envelope, scale, time);
+                PortalPoint inner1 = portalPoint(shape, a1, halfW, halfH, envelope, scale, time);
+
+                float width0 = outlineWidth(shape, inner0, envelope, scale);
+                float width1 = outlineWidth(shape, inner1, envelope, scale);
+
+                PortalPoint outer0 = offsetPortalPoint(shape, inner0, width0, halfW, halfH);
+                PortalPoint outer1 = offsetPortalPoint(shape, inner1, width1, halfW, halfH);
+
+                quadBidirectional(vc, mat4, normal, outer0.x, outer0.y, inner0.x, inner0.y, inner1.x, inner1.y, outer1.x, outer1.y, z, light, nz,
+                    164, 102, 255, alphaOuter,
+                    214, 166, 255, alphaInner,
+                    214, 166, 255, alphaInner,
+                    164, 102, 255, alphaOuter);
+            }
+        }
+    }
+
+    private void drawEdgeVeil(
+        PoseStack poseStack,
+        VertexConsumer vc,
+        int light,
+        float envelope,
+        float scale,
+        float time,
+        int shape
+    ) {
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f mat4 = pose.pose();
+        Matrix3f normal = pose.normal();
+
+        float halfH = HALF_HEIGHT * envelope * scale;
+        float halfW = HALF_WIDTH * envelope * scale;
+        if (halfH <= 0.0001f || halfW <= 0.0001f) {
+            return;
+        }
+
+        float zFront = Z_EPSILON + 0.0011f;
+        float zBack = -Z_EPSILON - 0.0011f;
+        float pulse = 0.72f + (0.14f * Mth.sin(time * 1.9f)) + (0.06f * Mth.sin(time * 4.7f));
+        int edgeAlpha = Mth.clamp((int) (74f * envelope * pulse), 0, 255);
+
+        for (int side = 0; side < 2; side++) {
+            float z = side == 0 ? zFront : zBack;
+            float nz = side == 0 ? 1.0f : -1.0f;
+
+            for (int i = 0; i < OUTLINE_SEGMENTS; i++) {
+                float a0 = Mth.TWO_PI * i / OUTLINE_SEGMENTS;
+                float a1 = Mth.TWO_PI * (i + 1) / OUTLINE_SEGMENTS;
+
+                PortalPoint edge0 = portalPoint(shape, a0, halfW, halfH, envelope, scale, time);
+                PortalPoint edge1 = portalPoint(shape, a1, halfW, halfH, envelope, scale, time);
+
+                float inset0 = innerVeilWidth(shape, edge0, envelope, scale);
+                float inset1 = innerVeilWidth(shape, edge1, envelope, scale);
+
+                PortalPoint inner0 = offsetPortalPoint(shape, edge0, -inset0, halfW, halfH);
+                PortalPoint inner1 = offsetPortalPoint(shape, edge1, -inset1, halfW, halfH);
+
+                quadBidirectional(vc, mat4, normal,
+                    edge0.x, edge0.y,
+                    inner0.x, inner0.y,
+                    inner1.x, inner1.y,
+                    edge1.x, edge1.y,
+                    z, light, nz,
+                    138, 94, 255, edgeAlpha,
+                    102, 74, 176, 0,
+                    102, 74, 176, 0,
+                    138, 94, 255, edgeAlpha);
+            }
+        }
+    }
+
+    private void drawInflowTrails(
+        PoseStack poseStack,
+        VertexConsumer vc,
+        int light,
+        float envelope,
+        float scale,
+        float time
+    ) {
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f mat4 = pose.pose();
+        Matrix3f normal = pose.normal();
+
+        float halfH = HALF_HEIGHT * envelope * scale;
+        float halfW = HALF_WIDTH * envelope * scale;
+        if (halfH <= 0.0001f || halfW <= 0.0001f) {
+            return;
+        }
+
+        int trails = 18;
+        for (int i = 0; i < trails; i++) {
+            float seed = i * 0.731f;
+            float p0 = Mth.frac(time * 0.34f + i * 0.143f);
+            float p1 = Mth.clamp(p0 + 0.17f, 0.0f, 1.0f);
+
+            float x0 = trailX(p0, seed, halfW, time);
+            float y0 = trailY(p0, seed, halfH, time);
+            float x1 = trailX(p1, seed, halfW, time);
+            float y1 = trailY(p1, seed, halfH, time);
+
+            float dx = x1 - x0;
+            float dy = y1 - y0;
+            float len = Mth.sqrt(dx * dx + dy * dy);
+            if (len < 0.0001f) {
+                continue;
+            }
+
+            float nx = -dy / len;
+            float ny = dx / len;
+            float width0 = (0.028f + 0.013f * Mth.sin(time * 1.2f + seed * 2.0f)) * (1.0f - p0) * envelope * scale;
+            float width1 = width0 * 0.32f;
+            int alphaTail = Mth.clamp((int) (74f * (1.0f - p0) * envelope), 0, 255);
+            int alphaHead = Mth.clamp((int) (146f * (1.0f - p0) * envelope), 0, 255);
+
+            float zFront = Z_EPSILON + 0.0019f;
+            float zBack = -Z_EPSILON - 0.0019f;
+            drawTrailQuad(vc, mat4, normal, x0, y0, x1, y1, nx, ny, width0, width1, zFront, light, 1.0f, alphaTail, alphaHead);
+            drawTrailQuad(vc, mat4, normal, x0, y0, x1, y1, nx, ny, width0, width1, zBack, light, -1.0f, alphaTail, alphaHead);
+        }
+    }
+
+    private void drawTrailQuad(
+        VertexConsumer vc,
+        Matrix4f mat4,
+        Matrix3f normal,
+        float x0,
+        float y0,
+        float x1,
+        float y1,
+        float nx,
+        float ny,
+        float width0,
+        float width1,
+        float z,
+        int light,
+        float nz,
+        int alphaTail,
+        int alphaHead
+    ) {
+        quadBidirectional(vc, mat4, normal,
+            x0 - nx * width0, y0 - ny * width0,
+            x0 + nx * width0, y0 + ny * width0,
+            x1 + nx * width1, y1 + ny * width1,
+            x1 - nx * width1, y1 - ny * width1,
+            z, light, nz,
+            146, 92, 255, alphaTail,
+            180, 124, 255, alphaTail,
+            236, 192, 255, alphaHead,
+            214, 166, 255, alphaHead);
+    }
+
+    private void drawPortalSquare(
+        PoseStack poseStack,
+        VertexConsumer vc,
+        float z,
+        float envelope,
+        float scale
+    ) {
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f mat4 = pose.pose();
+
+        float halfH = HALF_HEIGHT * envelope * scale;
+        float halfW = HALF_WIDTH * envelope * scale;
+
+        portalVertex(vc, mat4, -halfW, -halfH, z);
+        portalVertex(vc, mat4, halfW, -halfH, z);
+        portalVertex(vc, mat4, halfW, halfH, z);
+        portalVertex(vc, mat4, -halfW, halfH, z);
+
+        portalVertex(vc, mat4, -halfW, halfH, z);
+        portalVertex(vc, mat4, halfW, halfH, z);
+        portalVertex(vc, mat4, halfW, -halfH, z);
+        portalVertex(vc, mat4, -halfW, -halfH, z);
     }
 
     private void drawCollapseSpark(PoseStack poseStack, VertexConsumer vc, int light, float collapseProgress) {
@@ -259,194 +364,275 @@ public final class CorridorPortalBlockEntityRenderer implements BlockEntityRende
         return Mth.sqrt(clamped);
     }
 
-    private void drawPreviewMosaic(
+    private static float tearLeftX(float normalizedY, float halfWidth, float envelope, float scale, float time) {
+        float base = -halfWidth * ellipseWidthFactor(normalizedY);
+        float jagAmp = (0.038f + 0.034f * Mth.abs(normalizedY)) * envelope * scale;
+        float noise = tearNoise(normalizedY, time + 1.7f);
+        return base - jagAmp * (0.55f + noise);
+    }
+
+    private static float tearRightX(float normalizedY, float halfWidth, float envelope, float scale, float time) {
+        float base = halfWidth * ellipseWidthFactor(normalizedY);
+        float jagAmp = (0.038f + 0.034f * Mth.abs(normalizedY)) * envelope * scale;
+        float noise = tearNoise(normalizedY + 0.31f, time + 3.1f);
+        return base + jagAmp * (0.55f + noise);
+    }
+
+    private static float tearWobbleX(float normalizedY, float envelope, float scale, float time) {
+        float falloff = 1.0f - (normalizedY * normalizedY);
+        float amp = 0.03f * envelope * scale * Mth.clamp(falloff, 0.0f, 1.0f);
+        float wobble = Mth.sin(time * 2.9f + normalizedY * 7.4f) + (0.55f * Mth.sin(time * 5.6f - normalizedY * 12.0f));
+        return amp * wobble;
+    }
+
+    private static float tearNoise(float n, float t) {
+        float a = Mth.sin((n * 21.0f) + (t * 2.6f));
+        float b = Mth.sin((n * 43.0f) - (t * 1.9f));
+        float c = Mth.sin((n * 71.0f) + (t * 3.7f));
+        return Mth.clamp((a * 0.5f) + (b * 0.32f) + (c * 0.18f), -1.0f, 1.0f);
+    }
+
+    private static float trailX(float p, float seed, float halfW, float time) {
+        float side = (seed % 2.0f) < 1.0f ? -1.0f : 1.0f;
+        float start = side * halfW * (2.15f + (0.36f * Mth.sin(seed * 2.3f)));
+        float end = side * halfW * (0.34f + (0.06f * Mth.sin(seed * 4.1f + time * 1.2f)));
+        float curve = Mth.sin((p * 7.2f) + (time * 3.1f) + seed * 5.3f) * halfW * 0.2f * (1.0f - p);
+        return Mth.lerp(p, start, end) + curve;
+    }
+
+    private static float trailY(float p, float seed, float halfH, float time) {
+        float start = Mth.sin(seed * 6.7f) * halfH * 1.8f;
+        float end = Mth.sin(seed * 11.1f + time * 0.6f) * halfH * 0.38f;
+        float drift = Mth.cos((p * 8.2f) + seed * 3.8f + time * 2.0f) * halfH * 0.16f * (1.0f - p);
+        return Mth.lerp(p, start, end) + drift;
+    }
+
+    private static PortalPoint portalPoint(int shape, float angle, float halfW, float halfH, float envelope, float scale, float time) {
+        float cos = Mth.cos(angle);
+        float sin = Mth.sin(angle);
+
+        if (shape == 1) {
+            float extent = 1.0f / Math.max(Math.abs(cos), Math.abs(sin));
+            return new PortalPoint(cos * halfW * extent, sin * halfH * extent);
+        }
+
+        float wobble = tearWobbleX(sin, envelope, scale, time);
+        return new PortalPoint(
+            (cos >= 0.0f ? tearRightX(sin, halfW, envelope, scale, time) : tearLeftX(sin, halfW, envelope, scale, time)) + wobble,
+            sin * halfH
+        );
+    }
+
+    private static float outlineWidth(int shape, PortalPoint point, float envelope, float scale) {
+        if (shape == 1) {
+            float halfW = HALF_WIDTH * envelope * scale;
+            float halfH = HALF_HEIGHT * envelope * scale;
+            float xRatio = Math.abs(point.x) / Math.max(0.0001f, halfW);
+            float yRatio = Math.abs(point.y) / Math.max(0.0001f, halfH);
+            float topBottomWeight = Mth.clamp((yRatio - xRatio + 0.18f) / 0.36f, 0.0f, 1.0f);
+            float cornerWeight = 1.0f - Mth.clamp(Math.abs(xRatio - yRatio) / 0.22f, 0.0f, 1.0f);
+            float sideWidth = 0.058f;
+            float topWidth = 0.086f;
+            float cornerWidth = 0.076f;
+            float blended = Mth.lerp(topBottomWeight, sideWidth, topWidth);
+            blended = Mth.lerp(cornerWeight, blended, cornerWidth);
+            return blended * envelope * scale;
+        }
+
+        float verticalBias = Math.abs(point.y) / Math.max(0.0001f, HALF_HEIGHT * envelope * scale);
+        return (0.052f + 0.034f * verticalBias) * envelope * scale;
+    }
+
+    private static float innerVeilWidth(int shape, PortalPoint point, float envelope, float scale) {
+        if (shape == 1) {
+            float halfW = HALF_WIDTH * envelope * scale;
+            float halfH = HALF_HEIGHT * envelope * scale;
+            float xRatio = Math.abs(point.x) / Math.max(0.0001f, halfW);
+            float yRatio = Math.abs(point.y) / Math.max(0.0001f, halfH);
+            float topBottomWeight = Mth.clamp((yRatio - xRatio + 0.18f) / 0.36f, 0.0f, 1.0f);
+            return Mth.lerp(topBottomWeight, 0.038f, 0.054f) * envelope * scale;
+        }
+
+        float verticalBias = Math.abs(point.y) / Math.max(0.0001f, HALF_HEIGHT * envelope * scale);
+        return (0.03f + 0.024f * verticalBias) * envelope * scale;
+    }
+
+    private void drawSquareCornerAccents(
         PoseStack poseStack,
         VertexConsumer vc,
         int light,
-        PreviewGrid preview,
-        float z,
-        float envelope
+        float envelope,
+        float scale,
+        float time,
+        int shape
     ) {
+        if (shape != 1) {
+            return;
+        }
+
         PoseStack.Pose pose = poseStack.last();
         Matrix4f mat4 = pose.pose();
         Matrix3f normal = pose.normal();
 
-        float portalHalfHeight = HALF_HEIGHT * envelope * preview.scale;
-        float portalHalfWidth = HALF_WIDTH * envelope * preview.scale;
-        int alpha = (int) (255 * envelope);
+        float halfH = HALF_HEIGHT * envelope * scale;
+        float halfW = HALF_WIDTH * envelope * scale;
+        float zFront = Z_EPSILON + 0.0022f;
+        float zBack = -Z_EPSILON - 0.0022f;
+        float pulse = 0.56f + (0.24f * Mth.sin(time * 2.5f)) + (0.12f * Mth.sin(time * 7.0f));
+        int alphaOuter = Mth.clamp((int) (122f * envelope * pulse), 0, 255);
+        int alphaInner = Mth.clamp((int) (196f * envelope * pulse), 0, 255);
+        float inset = 0.09f * envelope * scale;
+        float flare = 0.07f * envelope * scale;
 
-        for (int row = 0; row < preview.rows; row++) {
-            float rowT0 = row / (float) preview.rows;
-            float rowT1 = (row + 1) / (float) preview.rows;
+        drawCornerAccent(vc, mat4, normal, light, zFront, 1.0f, halfW, halfH, -1.0f, -1.0f, inset, flare, alphaOuter, alphaInner);
+        drawCornerAccent(vc, mat4, normal, light, zFront, 1.0f, halfW, halfH, 1.0f, -1.0f, inset, flare, alphaOuter, alphaInner);
+        drawCornerAccent(vc, mat4, normal, light, zFront, 1.0f, halfW, halfH, 1.0f, 1.0f, inset, flare, alphaOuter, alphaInner);
+        drawCornerAccent(vc, mat4, normal, light, zFront, 1.0f, halfW, halfH, -1.0f, 1.0f, inset, flare, alphaOuter, alphaInner);
 
-            float y0 = Mth.lerp(rowT0, -portalHalfHeight, portalHalfHeight);
-            float y1 = Mth.lerp(rowT1, -portalHalfHeight, portalHalfHeight);
-            float halfW0 = portalHalfWidth * ellipseWidthFactor(y0 / portalHalfHeight);
-            float halfW1 = portalHalfWidth * ellipseWidthFactor(y1 / portalHalfHeight);
-
-            for (int col = 0; col < preview.cols; col++) {
-                TextureAtlasSprite sprite = preview.sprites[row][col];
-                if (sprite == null) {
-                    continue;
-                }
-
-                float colT0 = col / (float) preview.cols;
-                float colT1 = (col + 1) / (float) preview.cols;
-
-                float x00 = Mth.lerp(colT0, -halfW0, halfW0);
-                float x10 = Mth.lerp(colT1, -halfW0, halfW0);
-                float x01 = Mth.lerp(colT0, -halfW1, halfW1);
-                float x11 = Mth.lerp(colT1, -halfW1, halfW1);
-
-                float u0 = sprite.getU0();
-                float u1 = sprite.getU1();
-                float v0 = sprite.getV0();
-                float v1 = sprite.getV1();
-
-                vertex(vc, mat4, normal, x00, y0, z, u0, v0, 255, 255, 255, alpha, light, 1.0f);
-                vertex(vc, mat4, normal, x10, y0, z, u1, v0, 255, 255, 255, alpha, light, 1.0f);
-                vertex(vc, mat4, normal, x11, y1, z, u1, v1, 255, 255, 255, alpha, light, 1.0f);
-                vertex(vc, mat4, normal, x01, y1, z, u0, v1, 255, 255, 255, alpha, light, 1.0f);
-
-                vertex(vc, mat4, normal, x01, y1, z, u0, v1, 255, 255, 255, alpha, light, -1.0f);
-                vertex(vc, mat4, normal, x11, y1, z, u1, v1, 255, 255, 255, alpha, light, -1.0f);
-                vertex(vc, mat4, normal, x10, y0, z, u1, v0, 255, 255, 255, alpha, light, -1.0f);
-                vertex(vc, mat4, normal, x00, y0, z, u0, v0, 255, 255, 255, alpha, light, -1.0f);
-            }
-        }
+        drawCornerAccent(vc, mat4, normal, light, zBack, -1.0f, halfW, halfH, -1.0f, -1.0f, inset, flare, alphaOuter, alphaInner);
+        drawCornerAccent(vc, mat4, normal, light, zBack, -1.0f, halfW, halfH, 1.0f, -1.0f, inset, flare, alphaOuter, alphaInner);
+        drawCornerAccent(vc, mat4, normal, light, zBack, -1.0f, halfW, halfH, 1.0f, 1.0f, inset, flare, alphaOuter, alphaInner);
+        drawCornerAccent(vc, mat4, normal, light, zBack, -1.0f, halfW, halfH, -1.0f, 1.0f, inset, flare, alphaOuter, alphaInner);
     }
 
-    private PreviewGrid resolveLiveWindowPreview(CorridorPortalBlockEntity portal, BlockState sourceState, float scale) {
-        Minecraft mc = Minecraft.getInstance();
-        Level level = portal.getLevel();
-        if (level == null || mc.player == null || mc.gameRenderer == null) {
-            return null;
-        }
+    private void drawCornerAccent(
+        VertexConsumer vc,
+        Matrix4f mat4,
+        Matrix3f normal,
+        int light,
+        float z,
+        float nz,
+        float halfW,
+        float halfH,
+        float sx,
+        float sy,
+        float inset,
+        float flare,
+        int alphaOuter,
+        int alphaInner
+    ) {
+        float outerX = sx * halfW;
+        float outerY = sy * halfH;
+        float edgeX = sx * (halfW - inset);
+        float edgeY = sy * (halfH - inset);
+        float innerX = sx * (halfW - inset - flare * 0.55f);
+        float innerY = sy * (halfH - inset - flare * 0.55f);
+        float diagX = sx * (halfW + flare * 0.42f);
+        float diagY = sy * (halfH + flare * 0.42f);
 
-        String targetDim = portal.getRenderTargetDimensionId();
-        BlockPos targetPos = portal.getRenderTargetPos();
-        if (targetDim == null || targetPos == null) {
-            return null;
-        }
+        quadBidirectional(vc, mat4, normal,
+            edgeX, outerY,
+            outerX, outerY,
+            diagX, diagY,
+            outerX, edgeY,
+            z, light, nz,
+            190, 128, 255, alphaInner,
+            236, 198, 255, alphaOuter,
+            184, 116, 255, 0,
+            190, 128, 255, alphaInner);
 
-        String currentDim = level.dimension().location().toString();
-        if (!currentDim.equals(targetDim) || !level.isLoaded(targetPos)) {
-            return null;
-        }
+        quadBidirectional(vc, mat4, normal,
+            edgeX, edgeY,
+            innerX, edgeY,
+            diagX, diagY,
+            edgeX, innerY,
+            z, light, nz,
+            184, 116, 255, alphaInner,
+            136, 94, 220, 0,
+            184, 116, 255, 0,
+            136, 94, 220, 0);
+    }
 
-        BlockState targetState = level.getBlockState(targetPos);
-        if (!targetState.hasProperty(CorridorPortalBlock.AXIS)) {
-            return null;
-        }
-
-        int cols = ManifestationConfig.INSTANCE.portalLiveViewCols();
-        int rows = ManifestationConfig.INSTANCE.portalLiveViewRows();
-        float maxDist = ManifestationConfig.INSTANCE.portalLiveViewDistanceBlocks();
-
-        Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
-        Vec3 sourceCenter = Vec3.atCenterOf(portal.getBlockPos());
-        Vec3 targetCenter = Vec3.atCenterOf(targetPos);
-
-        Vec3 sourceBaseNormal = normalFromAxis(sourceState.getValue(CorridorPortalBlock.AXIS));
-        double sideSign = cameraPos.subtract(sourceCenter).dot(sourceBaseNormal) >= 0.0 ? 1.0 : -1.0;
-
-        Vec3 sourceNormal = sourceBaseNormal.scale(sideSign);
-        Vec3 sourceRight = rightFromAxis(sourceState.getValue(CorridorPortalBlock.AXIS), sideSign);
-
-        Vec3 targetBaseNormal = normalFromAxis(targetState.getValue(CorridorPortalBlock.AXIS));
-        Vec3 targetNormal = targetBaseNormal.scale(sideSign);
-        Vec3 targetRight = rightFromAxis(targetState.getValue(CorridorPortalBlock.AXIS), sideSign);
-        Vec3 up = new Vec3(0.0, 1.0, 0.0);
-
-        Vec3 delta = cameraPos.subtract(sourceCenter);
-        double localR = delta.dot(sourceRight);
-        double localU = delta.y;
-        double localN = delta.dot(sourceNormal);
-
-        Vec3 virtualCamera = targetCenter
-            .add(targetRight.scale(localR))
-            .add(up.scale(localU))
-            .add(targetNormal.scale(-localN));
-
-        TextureAtlasSprite[][] sprites = new TextureAtlasSprite[rows][cols];
-        float halfW = HALF_WIDTH * scale;
-        float halfH = HALF_HEIGHT * scale;
-
-        for (int row = 0; row < rows; row++) {
-            float v = ((row + 0.5f) / rows) * 2.0f - 1.0f;
-            for (int col = 0; col < cols; col++) {
-                float u = ((col + 0.5f) / cols) * 2.0f - 1.0f;
-
-                Vec3 planePoint = targetCenter
-                    .add(targetRight.scale(u * halfW))
-                    .add(up.scale(v * halfH));
-
-                Vec3 dir = planePoint.subtract(virtualCamera);
-                if (dir.lengthSqr() < 1.0e-8) {
-                    continue;
-                }
-
-                Vec3 rayDir = dir.normalize();
-                Vec3 rayEnd = virtualCamera.add(rayDir.scale(maxDist));
-                BlockHitResult hit = level.clip(new ClipContext(
-                    virtualCamera,
-                    rayEnd,
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    mc.player
-                ));
-
-                if (hit.getType() != HitResult.Type.BLOCK) {
-                    continue;
-                }
-
-                BlockPos hitPos = hit.getBlockPos();
-                BlockState hitState = level.getBlockState(hitPos);
-                if (hitState.getBlock() == ManifestationBlocks.CORRIDOR_PORTAL_BLOCK || hitState.isAir()) {
-                    continue;
-                }
-
-                sprites[row][col] = mc.getBlockRenderer()
-                    .getBlockModelShaper()
-                    .getBlockModel(hitState)
-                    .getParticleIcon();
+    private static PortalPoint offsetPortalPoint(int shape, PortalPoint point, float distance, float halfW, float halfH) {
+        float nx;
+        float ny;
+        if (shape == 1) {
+            float xRatio = Math.abs(point.x) / Math.max(0.0001f, halfW);
+            float yRatio = Math.abs(point.y) / Math.max(0.0001f, halfH);
+            float cornerBlend = 1.0f - Mth.clamp(Math.abs(xRatio - yRatio) / 0.16f, 0.0f, 1.0f);
+            if (cornerBlend > 0.0f) {
+                nx = Math.signum(point.x);
+                ny = Math.signum(point.y);
+                float len = Mth.sqrt(nx * nx + ny * ny);
+                nx /= len;
+                ny /= len;
+            } else if (yRatio > xRatio) {
+                nx = 0.0f;
+                ny = Math.signum(point.y);
+            } else {
+                nx = Math.signum(point.x);
+                ny = 0.0f;
+            }
+        } else {
+            nx = point.x / Math.max(0.0001f, halfW);
+            ny = point.y / Math.max(0.0001f, halfH);
+            float len = Mth.sqrt(nx * nx + ny * ny);
+            if (len <= 0.0001f) {
+                nx = 1.0f;
+                ny = 0.0f;
+            } else {
+                nx /= len;
+                ny /= len;
             }
         }
 
-        return new PreviewGrid(sprites, rows, cols, scale);
+        return new PortalPoint(point.x + nx * distance, point.y + ny * distance);
     }
 
-    private static Vec3 normalFromAxis(Direction.Axis axis) {
-        return axis == Direction.Axis.X ? new Vec3(1.0, 0.0, 0.0) : new Vec3(0.0, 0.0, 1.0);
+    private static void quadBidirectional(
+        VertexConsumer vc,
+        Matrix4f mat4,
+        Matrix3f normal,
+        float x0,
+        float y0,
+        float x1,
+        float y1,
+        float x2,
+        float y2,
+        float x3,
+        float y3,
+        float z,
+        int light,
+        float normalZ,
+        int r0,
+        int g0,
+        int b0,
+        int a0,
+        int r1,
+        int g1,
+        int b1,
+        int a1,
+        int r2,
+        int g2,
+        int b2,
+        int a2,
+        int r3,
+        int g3,
+        int b3,
+        int a3
+    ) {
+        vertex(vc, mat4, normal, x0, y0, z, 0.0f, 0.0f, r0, g0, b0, a0, light, normalZ);
+        vertex(vc, mat4, normal, x1, y1, z, 1.0f, 0.0f, r1, g1, b1, a1, light, normalZ);
+        vertex(vc, mat4, normal, x2, y2, z, 1.0f, 1.0f, r2, g2, b2, a2, light, normalZ);
+        vertex(vc, mat4, normal, x3, y3, z, 0.0f, 1.0f, r3, g3, b3, a3, light, normalZ);
+
+        vertex(vc, mat4, normal, x3, y3, z, 0.0f, 1.0f, r3, g3, b3, a3, light, -normalZ);
+        vertex(vc, mat4, normal, x2, y2, z, 1.0f, 1.0f, r2, g2, b2, a2, light, -normalZ);
+        vertex(vc, mat4, normal, x1, y1, z, 1.0f, 0.0f, r1, g1, b1, a1, light, -normalZ);
+        vertex(vc, mat4, normal, x0, y0, z, 0.0f, 0.0f, r0, g0, b0, a0, light, -normalZ);
     }
 
-    private static Vec3 rightFromAxis(Direction.Axis axis, double sideSign) {
-        if (axis == Direction.Axis.X) {
-            return new Vec3(0.0, 0.0, sideSign >= 0.0 ? -1.0 : 1.0);
-        }
-        return new Vec3(sideSign >= 0.0 ? 1.0 : -1.0, 0.0, 0.0);
+    private record PortalPoint(float x, float y) {
     }
 
-    private TextureAtlasSprite resolvePortalSprite() {
-        TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(PORTAL_SPRITE_ID);
-        if (sprite == null) {
-            return Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getBlockModel(net.minecraft.world.level.block.Blocks.NETHER_PORTAL.defaultBlockState()).getParticleIcon();
-        }
-        return sprite;
-    }
-
-    private static final class PreviewGrid {
-        private final TextureAtlasSprite[][] sprites;
-        private final int rows;
-        private final int cols;
-        private final float scale;
-
-        private PreviewGrid(TextureAtlasSprite[][] sprites, int rows, int cols, float scale) {
-            this.sprites = sprites;
-            this.rows = rows;
-            this.cols = cols;
-            this.scale = scale;
-        }
+    private static void portalVertex(
+        VertexConsumer vc,
+        Matrix4f mat4,
+        float x,
+        float y,
+        float z
+    ) {
+        vc.vertex(mat4, x, y, z).endVertex();
     }
 
     private static void vertex(

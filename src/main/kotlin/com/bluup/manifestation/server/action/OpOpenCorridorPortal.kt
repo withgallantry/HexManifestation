@@ -33,7 +33,8 @@ import java.util.concurrent.ConcurrentHashMap
  * Create a linked pair of corridor portals from two vectors.
  *
  * Stack shape on entry (top -> bottom):
- *   scale (optional, max 3)
+ *   scale (optional, >0 and <=3; only if shape is provided)
+ *   shape (optional; 0 = oval, 1 = square)
  *   media budget
  *   destination presence intent
  *   source portal vector
@@ -49,16 +50,46 @@ object OpOpenCorridorPortal : Action {
             throw MishapNotEnoughArgs(3, stack.size)
         }
 
-        val scale = if (stack.size >= 4 && stack.last() is DoubleIota) {
+        var portalShape = 0
+        var scale = 1.0f
+
+        // Optional suffix arguments are positional: [shape], [shape, scale].
+        val hasShapeAndScale =
+            stack.size >= 5 &&
+                stack[stack.lastIndex] is DoubleIota &&
+                stack[stack.lastIndex - 1] is DoubleIota &&
+                stack[stack.lastIndex - 2] is DoubleIota &&
+                stack[stack.lastIndex - 3] is PresenceIntentIota
+
+        val hasShapeOnly =
+            !hasShapeAndScale &&
+                stack.size >= 4 &&
+                stack[stack.lastIndex] is DoubleIota &&
+                stack[stack.lastIndex - 1] is DoubleIota &&
+                stack[stack.lastIndex - 2] is PresenceIntentIota
+
+        if (hasShapeAndScale) {
             val scaleIota = stack.removeAt(stack.lastIndex) as DoubleIota
-            val raw = scaleIota.double
-            if (raw <= 0.0 || raw > 3.0) {
-                stack.add(scaleIota)
+            val shapeIota = stack.removeAt(stack.lastIndex) as DoubleIota
+
+            val shapeRounded = Math.round(shapeIota.double).toInt()
+            if (shapeRounded != 0 && shapeRounded != 1) {
+                throw MishapInvalidIota.ofType(shapeIota, 1, "0 or 1")
+            }
+            portalShape = shapeRounded
+
+            val rawScale = scaleIota.double
+            if (rawScale <= 0.0 || rawScale > 3.0) {
                 throw MishapInvalidIota.ofType(scaleIota, 0, "number in (0, 3]")
             }
-            raw.toFloat()
-        } else {
-            1.0f
+            scale = rawScale.toFloat()
+        } else if (hasShapeOnly) {
+            val shapeIota = stack.removeAt(stack.lastIndex) as DoubleIota
+            val shapeRounded = Math.round(shapeIota.double).toInt()
+            if (shapeRounded != 0 && shapeRounded != 1) {
+                throw MishapInvalidIota.ofType(shapeIota, 0, "0 or 1")
+            }
+            portalShape = shapeRounded
         }
 
         val mediaIota = stack.removeAt(stack.lastIndex)
@@ -144,8 +175,24 @@ object OpOpenCorridorPortal : Action {
             throw MishapNotEnoughMedia(mediaBudget)
         }
 
-        aPortal.linkTo(sourceLevel, bPos, targetLevel.dimension().location().toString(), caster.uuid, mediaBudget, scale)
-        bPortal.linkTo(targetLevel, aPos, sourceLevel.dimension().location().toString(), caster.uuid, mediaBudget, scale)
+        aPortal.linkTo(
+            sourceLevel,
+            bPos,
+            targetLevel.dimension().location().toString(),
+            caster.uuid,
+            mediaBudget,
+            scale,
+            portalShape
+        )
+        bPortal.linkTo(
+            targetLevel,
+            aPos,
+            sourceLevel.dimension().location().toString(),
+            caster.uuid,
+            mediaBudget,
+            scale,
+            portalShape
+        )
         OWNED_PORTALS[caster.uuid] = PortalPair(
             PortalEndpoint(sourceLevel.dimension().location().toString(), aPos.immutable()),
             PortalEndpoint(targetLevel.dimension().location().toString(), bPos.immutable())
