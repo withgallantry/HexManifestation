@@ -12,6 +12,12 @@
     "is_per_world": false
   },
   {
+    "id": "manifestation:create_radial_menu",
+    "signature": "awwaeawwaqwddade",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
     "id": "manifestation:intent_button",
     "signature": "awwaqwedwwdaa",
     "startdir": "NORTH_EAST",
@@ -38,6 +44,36 @@
   {
     "id": "manifestation:intent_dropdown",
     "signature": "awwaqwedwwdawaq",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:presence_intent",
+    "signature": "awwaqwedwwdawqea",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:manifest_echo",
+    "signature": "awwaqwedwwdawqwea",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:link_intent_relay",
+    "signature": "awwaqwedwwdawdw",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:unlink_intent_relay",
+    "signature": "awwaqwedwwdawda",
+    "startdir": "NORTH_EAST",
+    "is_per_world": false
+  },
+  {
+    "id": "manifestation:open_corridor_portal",
+    "signature": "awwaqwedwwdawqwe",
     "startdir": "NORTH_EAST",
     "is_per_world": false
   }
