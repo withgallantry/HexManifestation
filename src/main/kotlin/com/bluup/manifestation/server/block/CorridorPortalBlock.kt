@@ -61,20 +61,33 @@ class CorridorPortalBlock(properties: Properties) : BaseEntityBlock(properties) 
         // Keep portal interaction to a slim, yaw-aligned plane around the visual aperture.
         val scale = portal.getRenderScale().coerceIn(0.1f, 3.0f).toDouble()
         val center = Vec3.atCenterOf(pos)
-        val relative = entity.position().subtract(center)
+        val entityCenter = entity.boundingBox.center
+        val relative = entityCenter.subtract(center)
 
         val yawRad = Math.toRadians(portal.getRenderYawDegrees().toDouble())
         val normal = Vec3(-kotlin.math.sin(yawRad), 0.0, kotlin.math.cos(yawRad))
         val tangent = Vec3(kotlin.math.cos(yawRad), 0.0, kotlin.math.sin(yawRad))
 
-        val halfThickness = 0.08
+        val halfThickness = 0.10
         val halfWidth = 0.52 * scale
         val halfHeight = 0.82 * scale
+
+        val bb = entity.boundingBox
+        val halfSizeX = bb.xsize * 0.5
+        val halfSizeY = bb.ysize * 0.5
+        val halfSizeZ = bb.zsize * 0.5
+
+        // Project the entity volume onto each portal axis so touching the band with any body part counts.
+        val normalReach = kotlin.math.abs(normal.x) * halfSizeX + kotlin.math.abs(normal.y) * halfSizeY + kotlin.math.abs(normal.z) * halfSizeZ
+        val tangentReach = kotlin.math.abs(tangent.x) * halfSizeX + kotlin.math.abs(tangent.y) * halfSizeY + kotlin.math.abs(tangent.z) * halfSizeZ
 
         val depth = relative.dot(normal)
         val horizontal = relative.dot(tangent)
         val vertical = relative.y
-        if (kotlin.math.abs(depth) > halfThickness || kotlin.math.abs(horizontal) > halfWidth || kotlin.math.abs(vertical) > halfHeight) {
+        if (kotlin.math.abs(depth) > (halfThickness + normalReach)
+            || kotlin.math.abs(horizontal) > (halfWidth + tangentReach)
+            || kotlin.math.abs(vertical) > (halfHeight + halfSizeY)
+        ) {
             return
         }
 

@@ -41,9 +41,8 @@ public final class MenuScreen extends Screen {
     private static final int GRID_BUTTON_WIDTH = 120;
 
     // Radial layout constants.
-    private static final int RADIAL_OUTER_RADIUS = 92;
-    private static final int RADIAL_INNER_RADIUS = 30;
-    private static final int RADIAL_LABEL_RADIUS = 61;
+    private static final int RADIAL_OUTER_RADIUS = 122;
+    private static final int RADIAL_INNER_RADIUS = 44;
     private static final int RADIAL_FILL_STEPS = 28;
     private static final double RADIAL_GAP_RADIANS = Math.toRadians(4.0);
 
@@ -633,11 +632,11 @@ public final class MenuScreen extends Screen {
             double end = radialEndAngle(i, entries.size()) - RADIAL_GAP_RADIANS;
             boolean isHovered = i == hovered;
 
-            int fillAlpha = isHovered ? 92 + (int) (40 * pulse) : 62 + (int) (18 * pulse);
-            int frameAlpha = isHovered ? 180 + (int) (30 * pulse) : 118 + (int) (20 * pulse);
+            int fillAlpha = isHovered ? 132 + (int) (48 * pulse) : 62 + (int) (18 * pulse);
+            int frameAlpha = isHovered ? 218 + (int) (30 * pulse) : 118 + (int) (20 * pulse);
             int fill = (fillAlpha << 24) | themed(0x43235D, 0x15394D);
             int frame = (frameAlpha << 24) | themed(0xE1B7FF, 0x9DE8FF);
-            int glow = (((isHovered ? 86 : 46) + (int) (32 * pulse)) << 24) | themed(0xA872FF, 0x5FD3FF);
+            int glow = (((isHovered ? 120 : 46) + (int) (32 * pulse)) << 24) | themed(0xA872FF, 0x5FD3FF);
 
             for (int step = 0; step <= RADIAL_FILL_STEPS; step++) {
                 double t = step / (double) RADIAL_FILL_STEPS;
@@ -674,6 +673,9 @@ public final class MenuScreen extends Screen {
                 int outerX = geometry.centerX + (int) Math.round(Math.cos(angle) * geometry.outerRadius);
                 int outerY = geometry.centerY + (int) Math.round(Math.sin(angle) * geometry.outerRadius);
                 graphics.fill(outerX, outerY, outerX + 1, outerY + 1, frame);
+                int innerX = geometry.centerX + (int) Math.round(Math.cos(angle) * geometry.innerRadius);
+                int innerY = geometry.centerY + (int) Math.round(Math.sin(angle) * geometry.innerRadius);
+                graphics.fill(innerX, innerY, innerX + 1, innerY + 1, isHovered ? frame : (frame & 0x88FFFFFF));
                 if (isHovered) {
                     int glowX = geometry.centerX + (int) Math.round(Math.cos(angle) * (geometry.outerRadius + 1));
                     int glowY = geometry.centerY + (int) Math.round(Math.sin(angle) * (geometry.outerRadius + 1));
@@ -682,9 +684,10 @@ public final class MenuScreen extends Screen {
             }
 
             double mid = (start + end) * 0.5;
-            int labelX = geometry.centerX + (int) Math.round(Math.cos(mid) * RADIAL_LABEL_RADIUS);
-            int labelY = geometry.centerY + (int) Math.round(Math.sin(mid) * RADIAL_LABEL_RADIUS);
-            int maxTextWidth = Math.max(36, sectorLabelWidth(geometry, entries.size(), mid));
+            int labelRadius = radialLabelRadius(geometry);
+            int labelX = geometry.centerX + (int) Math.round(Math.cos(mid) * labelRadius);
+            int labelY = geometry.centerY + (int) Math.round(Math.sin(mid) * labelRadius);
+            int maxTextWidth = Math.max(36, sectorLabelWidth(geometry, entries.size()));
             Component fitted = fittedRadialLabel(entry.label(), maxTextWidth);
             if (!fitted.getString().equals(entry.label().getString())) {
                 radialTruncatedTooltips.put(i, entry.label());
@@ -692,6 +695,33 @@ public final class MenuScreen extends Screen {
 
             int textWidth = this.font.width(fitted);
             int textColor = isHovered ? themed(0xFFF6EBFF, 0xFFF1FFFF) : themed(0xFFE3D0FF, 0xFFD7F4FF);
+            if (isHovered) {
+                int labelPadX = 4;
+                int labelPadY = 2;
+                int backing = ((86 + (int) (42 * pulse)) << 24) | themed(0x2A1836, 0x103447);
+                int backingEdge = ((160 + (int) (40 * pulse)) << 24) | themed(0xE0B9FF, 0x8CE7FF);
+                graphics.fill(
+                    labelX - (textWidth / 2) - labelPadX,
+                    labelY - (this.font.lineHeight / 2) - labelPadY,
+                    labelX + (textWidth / 2) + labelPadX,
+                    labelY + (this.font.lineHeight / 2) + labelPadY,
+                    backing
+                );
+                graphics.fill(
+                    labelX - (textWidth / 2) - labelPadX,
+                    labelY - (this.font.lineHeight / 2) - labelPadY,
+                    labelX + (textWidth / 2) + labelPadX,
+                    labelY - (this.font.lineHeight / 2) - labelPadY + 1,
+                    backingEdge
+                );
+                graphics.fill(
+                    labelX - (textWidth / 2) - labelPadX,
+                    labelY + (this.font.lineHeight / 2) + labelPadY - 1,
+                    labelX + (textWidth / 2) + labelPadX,
+                    labelY + (this.font.lineHeight / 2) + labelPadY,
+                    backingEdge
+                );
+            }
             graphics.drawString(
                 this.font,
                 fitted,
@@ -711,7 +741,6 @@ public final class MenuScreen extends Screen {
             geometry.centerY + geometry.innerRadius - 3,
             core
         );
-        graphics.drawCenteredString(this.font, menu.title(), geometry.centerX, geometry.centerY - 4, themed(0xFFE8D0FF, 0xFFD9F4FF));
         if (totalPages > 1) {
             graphics.drawCenteredString(
                 this.font,
@@ -1191,9 +1220,13 @@ public final class MenuScreen extends Screen {
         return (-Math.PI / 2.0) + (Math.PI * 2.0 * (index + 1) / count);
     }
 
-    private int sectorLabelWidth(RadialGeometry geometry, int count, double angle) {
+    private int radialLabelRadius(RadialGeometry geometry) {
+        return geometry.innerRadius + ((geometry.outerRadius - geometry.innerRadius) / 2);
+    }
+
+    private int sectorLabelWidth(RadialGeometry geometry, int count) {
         double halfSweep = Math.PI / count;
-        double arcHalfWidth = Math.sin(halfSweep) * RADIAL_LABEL_RADIUS;
+        double arcHalfWidth = Math.sin(halfSweep) * radialLabelRadius(geometry);
         int radialInset = geometry.outerRadius - geometry.innerRadius - 8;
         return Math.max(42, Math.min((int) Math.floor(arcHalfWidth * 2.0), radialInset * 2));
     }

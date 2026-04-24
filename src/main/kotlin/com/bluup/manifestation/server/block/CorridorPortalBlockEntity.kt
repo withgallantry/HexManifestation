@@ -127,6 +127,10 @@ class CorridorPortalBlockEntity(
             return
         }
 
+        if (level.gameTime % FLOW_PARTICLE_INTERVAL_TICKS == 0L) {
+            spawnLinkedFlowParticles(level)
+        }
+
         if (lastSustainDrainGameTime <= 0L) {
             lastSustainDrainGameTime = level.gameTime
             return
@@ -287,6 +291,8 @@ class CorridorPortalBlockEntity(
         private const val MEDIA_DRAIN_PER_STEP = 10L
         private const val OPEN_ANIM_TICKS = 12L
         private const val CLOSE_ANIM_TICKS = 12L
+        private const val FLOW_PARTICLE_INTERVAL_TICKS = 2L
+        private const val FLOW_PARTICLES_PER_BURST = 3
 
         private fun normalFromYaw(yawDegrees: Float): Vec3 {
             val radians = Math.toRadians(yawDegrees.toDouble())
@@ -359,5 +365,58 @@ class CorridorPortalBlockEntity(
         level.sendParticles(ParticleTypes.DRAGON_BREATH, center.x, center.y, center.z, 18, 0.24, 0.26, 0.24, 0.01)
         level.playSound(null, pos, SoundEvents.ENDER_EYE_DEATH, SoundSource.BLOCKS, 0.9f, 0.72f)
         level.playSound(null, pos, SoundEvents.BEACON_DEACTIVATE, SoundSource.BLOCKS, 0.45f, 0.75f)
+    }
+
+    private fun spawnLinkedFlowParticles(level: ServerLevel) {
+        if (collapseStartedAtGameTime >= 0L) {
+            return
+        }
+
+        val ownScale = renderScale.coerceIn(0.1f, 3.0f)
+        spawnInflowParticles(level, worldPosition, renderYawDegrees, ownScale)
+
+        val target = targetPos ?: return
+        val targetDim = targetDimensionId ?: return
+        val targetKey = ResourceKey.create(Registries.DIMENSION, ResourceLocation(targetDim))
+        val targetLevel = level.server.getLevel(targetKey) ?: return
+        if (targetLevel.getBlockState(target).block != ManifestationBlocks.CORRIDOR_PORTAL_BLOCK) {
+            return
+        }
+
+        val targetPortal = targetLevel.getBlockEntity(target) as? CorridorPortalBlockEntity
+        val targetYaw = targetPortal?.renderYawDegrees ?: renderYawDegrees
+        val targetScale = targetPortal?.renderScale?.coerceIn(0.1f, 3.0f) ?: ownScale
+        spawnInflowParticles(targetLevel, target, targetYaw, targetScale)
+    }
+
+    private fun spawnInflowParticles(level: ServerLevel, pos: BlockPos, yawDegrees: Float, scale: Float) {
+        val center = Vec3.atCenterOf(pos)
+        val yawRad = Math.toRadians(yawDegrees.toDouble())
+        val normal = Vec3(-kotlin.math.sin(yawRad), 0.0, kotlin.math.cos(yawRad))
+        val tangent = Vec3(kotlin.math.cos(yawRad), 0.0, kotlin.math.sin(yawRad))
+        val maxSide = 0.62 * scale
+        val maxHeight = 0.78 * scale
+
+        repeat(FLOW_PARTICLES_PER_BURST) {
+            val side = (level.random.nextDouble() * 2.0 - 1.0) * maxSide
+            val height = (level.random.nextDouble() * 2.0 - 1.0) * maxHeight
+            val face = if (level.random.nextBoolean()) 1.0 else -1.0
+            val depth = face * (0.22 + level.random.nextDouble() * 0.24)
+
+            val spawn = center
+                .add(tangent.scale(side))
+                .add(normal.scale(depth))
+                .add(0.0, height, 0.0)
+
+            val inward = center
+                .add(tangent.scale(side * 0.08))
+                .add(0.0, height * 0.75, 0.0)
+                .subtract(spawn)
+                .normalize()
+                .scale(0.055 + level.random.nextDouble() * 0.03)
+
+            level.sendParticles(ParticleTypes.WITCH, spawn.x, spawn.y, spawn.z, 0, inward.x, inward.y, inward.z, 1.0)
+            level.sendParticles(ParticleTypes.ENCHANT, spawn.x, spawn.y, spawn.z, 0, inward.x, inward.y, inward.z, 1.0)
+        }
     }
 }

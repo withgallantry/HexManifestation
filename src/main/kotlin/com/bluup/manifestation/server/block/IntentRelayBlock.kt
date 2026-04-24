@@ -85,7 +85,7 @@ class IntentRelayBlock(properties: Properties) : FaceAttachedHorizontalDirection
         hit: BlockHitResult
     ): InteractionResult {
         if (level.isClientSide) {
-            return InteractionResult.PASS
+            return InteractionResult.SUCCESS
         }
 
         val serverLevel = level as? ServerLevel ?: return InteractionResult.PASS
@@ -101,8 +101,8 @@ class IntentRelayBlock(properties: Properties) : FaceAttachedHorizontalDirection
             return InteractionResult.CONSUME
         }
 
-        val result = relay.forwardIntent(serverLevel, serverPlayer, hand)
-        return if (result.consumesAction()) InteractionResult.CONSUME else result
+        relay.forwardIntent(serverLevel, serverPlayer, hand)
+        return InteractionResult.CONSUME
     }
 
     override fun stepOn(level: Level, pos: BlockPos, state: BlockState, entity: Entity) {
